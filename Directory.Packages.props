@@ -1,0 +1,9 @@
+<Project>
+  <!-- Central Package Management: версии всех пакетов задаются только здесь -->
+  <PropertyGroup>
+    <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageVersion Include="NAudio" Version="3.3.0" />
+  </ItemGroup>
+</Project>

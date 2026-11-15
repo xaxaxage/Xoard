@@ -1,0 +1,13 @@
+<Project>
+  <!-- Общие настройки для всех проектов решения -->
+  <PropertyGroup>
+    <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <AnalysisLevel>latest-recommended</AnalysisLevel>
+    <Deterministic>true</Deterministic>
+    <Company>Soundboard</Company>
+    <Product>Soundboard</Product>
+    <Version>0.0.1</Version>
+  </PropertyGroup>
+</Project>

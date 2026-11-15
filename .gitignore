@@ -1,0 +1,23 @@
+# Сборка
+bin/
+obj/
+artifacts/
+publish/
+*.binlog
+
+# IDE
+.vs/
+.vscode/
+.idea/
+*.user
+*.suo
+*.DotSettings.user
+
+# Тесты
+TestResults/
+coverage*/
+
+# Прочее
+*.log
+Thumbs.db
+desktop.ini
