@@ -13,4 +13,8 @@
     <PackageReference Include="NAudio" />
   </ItemGroup>
 
+  <ItemGroup>
+    <ProjectReference Include="..\Soundboard.Core\Soundboard.Core.csproj" />
+  </ItemGroup>
+
 </Project>

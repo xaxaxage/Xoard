@@ -18,6 +18,10 @@ try
         "play" => Commands.Play(options),
         "tone" => Commands.Tone(options),
         "selftest" => SelfTest.Run(options),
+        "engine-devices" => EngineCommands.Devices(options),
+        "engine" => EngineCommands.Interactive(options),
+        "engine-selftest" => EngineSelfTest.Run(options),
+        "burn" => EngineSelfTest.Burn(options.Positional.Count > 0 ? int.Parse(options.Positional[0], System.Globalization.CultureInfo.InvariantCulture) : 1),
         _ => throw new CliException($"Неизвестная команда «{args[0]}». Справка: .\\poc.cmd help"),
     };
 }

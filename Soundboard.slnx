@@ -1,5 +1,9 @@
 <Solution>
   <Folder Name="/src/">
+    <Project Path="src/Soundboard.Core/Soundboard.Core.csproj" />
     <Project Path="src/Soundboard.Poc/Soundboard.Poc.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/Soundboard.Core.Tests/Soundboard.Core.Tests.csproj" />
   </Folder>
 </Solution>

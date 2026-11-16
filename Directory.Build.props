@@ -9,5 +9,7 @@
     <Company>Soundboard</Company>
     <Product>Soundboard</Product>
     <Version>0.0.1</Version>
+    <!-- Все bin/obj в artifacts/ в корне: короче пути (лимит Windows 260 символов) и чище дерево -->
+    <UseArtifactsOutput>true</UseArtifactsOutput>
   </PropertyGroup>
 </Project>
