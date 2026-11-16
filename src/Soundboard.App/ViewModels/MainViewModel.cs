@@ -43,6 +43,7 @@ public sealed partial class MainViewModel : ObservableObject, IAsyncDisposable
     private const string StopHotkeyName = "stop";
     private const string SoundHotkeyPrefix = "sound:";
     private HotkeyManager? hotkeys;
+    private Soundboard.Core.Control.ControlServer? controlServer;
     private AppConfig config;
     private bool suppressSettings;
     private bool engineRunning;
@@ -243,6 +244,12 @@ public sealed partial class MainViewModel : ObservableObject, IAsyncDisposable
         meterTimer.Start();
         foreach (var item in Sounds.ToList())
             _ = LoadAsync(item);
+
+        // Управление извне (MCP для Claude): named pipe только для текущего пользователя
+        var pipe = Environment.GetEnvironmentVariable("SOUNDBOARD_PIPE");
+        controlServer = new Soundboard.Core.Control.ControlServer(this,
+            string.IsNullOrWhiteSpace(pipe) ? Soundboard.Protocol.ControlProtocol.PipeName : pipe);
+        controlServer.Start();
     }
 
     // ───────── звуки ─────────
@@ -875,6 +882,8 @@ public sealed partial class MainViewModel : ObservableObject, IAsyncDisposable
         saveTimer.Stop();
         SaveNow();
         hotkeys?.Dispose();
+        if (controlServer is not null)
+            await controlServer.DisposeAsync().ConfigureAwait(false);
         await engine.DisposeAsync().ConfigureAwait(false);
     }
 

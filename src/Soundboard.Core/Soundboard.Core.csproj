@@ -14,6 +14,10 @@
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\Soundboard.Protocol\Soundboard.Protocol.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
     <InternalsVisibleTo Include="Soundboard.Core.Tests" />
     <!-- Консольный стенд проверки движка -->
     <InternalsVisibleTo Include="Soundboard.Poc" />

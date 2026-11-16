@@ -4,7 +4,38 @@
 их «в микрофон» через виртуальный кабель [VB-CABLE](https://vb-audio.com/Cable/), чтобы их
 слышали в Discord и играх.
 
-> Статус: **этап 3** — глобальные горячие клавиши (звуки и «Стоп всё»).
+> Статус: **этап 4** — управление из Claude Desktop (MCP).
+
+## Claude Desktop (MCP)
+
+Soundboard.Mcp — MCP-сервер (stdio). Claude Desktop запускает его сам, а он передаёт команды
+в открытое приложение Soundboard по named pipe `Soundboard.Control` (только для вашего пользователя Windows).
+
+1. Собрать сервер одним файлом (нужно один раз и после изменений):
+   ```powershell
+   .\publish-mcp.cmd
+   ```
+   Получится `publish\mcp\Soundboard.Mcp.exe` — .NET для него не нужен.
+2. Claude Desktop → Settings → Developer → **Edit Config** и добавить в `claude_desktop_config.json`:
+   ```json
+   {
+     "mcpServers": {
+       "soundboard": {
+         "command": "C:\\путь\\к\\Soundboard\\publish\\mcp\\Soundboard.Mcp.exe"
+       }
+     }
+   }
+   ```
+   (если там уже есть другие серверы — добавить `"soundboard": {…}` внутрь существующего `mcpServers`).
+3. Перезапустить Claude Desktop, открыть Soundboard и попросить, например: «включи звук аплодисментов».
+
+Инструменты: `list_sounds`, `play_sound` (имя целиком или часть, либо id), `stop_all`,
+`set_volume` (headphones / cable / mic, 0–100), `get_status`. Если Soundboard не запущен,
+Claude получит понятную ошибку «Soundboard не запущен».
+
+Протокол (`Soundboard.Protocol`): одна строка JSON на запрос `{id, command, args}` и ответ
+`{id, ok, result | error{code, message}}`. Команды выполняет `ISoundboardControl` — к нему же
+позже подключится внешний (облачный) канал.
 
 ## Запуск приложения
 

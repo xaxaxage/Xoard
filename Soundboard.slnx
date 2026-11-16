@@ -4,7 +4,9 @@
       <Platform Project="x64" />
     </Project>
     <Project Path="src/Soundboard.Core/Soundboard.Core.csproj" />
+    <Project Path="src/Soundboard.Mcp/Soundboard.Mcp.csproj" />
     <Project Path="src/Soundboard.Poc/Soundboard.Poc.csproj" />
+    <Project Path="src/Soundboard.Protocol/Soundboard.Protocol.csproj" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/Soundboard.Core.Tests/Soundboard.Core.Tests.csproj" />

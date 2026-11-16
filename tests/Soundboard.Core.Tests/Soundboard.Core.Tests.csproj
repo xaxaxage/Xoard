@@ -13,10 +13,14 @@
 
   <ItemGroup>
     <PackageReference Include="xunit.v3" />
+    <!-- MCP-клиент: проверяем собранный Soundboard.Mcp.exe так же, как его вызывает Claude Desktop -->
+    <PackageReference Include="ModelContextProtocol" />
   </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\Soundboard.Core\Soundboard.Core.csproj" />
+    <!-- Только порядок сборки: тест запускает готовый exe -->
+    <ProjectReference Include="..\..\src\Soundboard.Mcp\Soundboard.Mcp.csproj" ReferenceOutputAssembly="false" />
   </ItemGroup>
 
   <ItemGroup>
