@@ -1,0 +1,107 @@
+using System.Text.Json;
+using System.Text.Json.Serialization;
+using Soundboard.Core.Audio;
+
+namespace Soundboard.Core.Config;
+
+/// <summary>Положение и размер окна.</summary>
+public sealed record WindowPlacement(int X, int Y, int Width, int Height, bool Maximized);
+
+/// <summary>Все настройки приложения (то, что сохраняется в settings.json).</summary>
+public sealed record AppConfig
+{
+    /// <summary>Версия формата файла.</summary>
+    public int Version { get; init; } = 1;
+
+    /// <summary>Звук: устройства, громкости, режимы.</summary>
+    public AudioSettings Audio { get; init; } = AudioSettings.Default;
+
+    /// <summary>Порядок кнопок: имена файлов в папке звуков.</summary>
+    public IReadOnlyList<string> SoundOrder { get; init; } = [];
+
+    /// <summary>Анимации интерфейса (выключаются и при отключённых анимациях Windows).</summary>
+    public bool AnimationsEnabled { get; init; } = true;
+
+    /// <summary>Последнее положение окна.</summary>
+    public WindowPlacement? Window { get; init; }
+}
+
+/// <summary>
+/// Хранение настроек в JSON (%LOCALAPPDATA%\Soundboard\settings.json). Запись атомарная
+/// (временный файл + замена), испорченный файл откладывается в сторону, и берутся настройки по умолчанию.
+/// </summary>
+public sealed class ConfigStore
+{
+    private static readonly JsonSerializerOptions Options = new()
+    {
+        WriteIndented = true,
+        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+        Converters = { new JsonStringEnumConverter() },
+    };
+
+    private readonly Lock gate = new();
+
+    public ConfigStore(string path)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(path);
+        Path = path;
+    }
+
+    /// <summary>Путь по умолчанию.</summary>
+    public static string DefaultPath { get; } = System.IO.Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Soundboard", "settings.json");
+
+    /// <summary>Путь к файлу настроек.</summary>
+    public string Path { get; }
+
+    /// <summary>Сообщение о проблеме при последней загрузке (файл был испорчен), иначе null.</summary>
+    public string? LoadWarning { get; private set; }
+
+    /// <summary>Загружает настройки. Нет файла — настройки по умолчанию; испорчен — откладывает его и берёт умолчания.</summary>
+    public AppConfig Load()
+    {
+        lock (gate)
+        {
+            LoadWarning = null;
+            if (!File.Exists(Path))
+                return new AppConfig();
+
+            try
+            {
+                var json = File.ReadAllText(Path);
+                var config = JsonSerializer.Deserialize<AppConfig>(json, Options) ?? new AppConfig();
+                config.Audio.Validate();
+                return config with { SoundOrder = config.SoundOrder ?? [] };
+            }
+            catch (Exception ex) when (ex is JsonException or ArgumentOutOfRangeException or NotSupportedException or InvalidOperationException)
+            {
+                var backup = $"{Path}.bad-{DateTime.Now:yyyyMMdd-HHmmss}";
+                try
+                {
+                    File.Copy(Path, backup, overwrite: true);
+                }
+                catch (IOException)
+                {
+                    // Не смогли сохранить копию — всё равно продолжаем с умолчаниями
+                }
+
+                LoadWarning = $"Файл настроек повреждён, загружены настройки по умолчанию. Копия: {backup}";
+                return new AppConfig();
+            }
+        }
+    }
+
+    /// <summary>Сохраняет настройки атомарно.</summary>
+    public void Save(AppConfig config)
+    {
+        ArgumentNullException.ThrowIfNull(config);
+        lock (gate)
+        {
+            var dir = System.IO.Path.GetDirectoryName(Path)!;
+            Directory.CreateDirectory(dir);
+            var temp = Path + ".tmp";
+            File.WriteAllText(temp, JsonSerializer.Serialize(config, Options));
+            File.Move(temp, Path, overwrite: true);
+        }
+    }
+}
