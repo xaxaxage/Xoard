@@ -44,12 +44,25 @@ public sealed partial class SoundItem : ObservableObject
     [ObservableProperty]
     public partial double Progress { get; set; }
 
+    /// <summary>Горячая клавиша («Ctrl+Alt+1») или пусто.</summary>
+    [ObservableProperty]
+    public partial string HotkeyText { get; set; } = "";
+
+    public bool HasHotkey => HotkeyText.Length > 0;
+
+    partial void OnHotkeyTextChanged(string value)
+    {
+        OnPropertyChanged(nameof(HasHotkey));
+        OnPropertyChanged(nameof(Tooltip));
+    }
+
     public bool HasError => Error is not null;
 
     /// <summary>Имя для экранного диктора и автоматизации (плитка сетки).</summary>
     public override string ToString() => Name;
 
-    public string Tooltip => Error ?? $"{Name}{(DurationText.Length > 0 ? $" · {DurationText}" : "")}\nКлик — играть, правая кнопка — действия";
+    public string Tooltip => Error ?? $"{Name}{(DurationText.Length > 0 ? $" · {DurationText}" : "")}" +
+        (HotkeyText.Length > 0 ? $" · {HotkeyText}" : "") + "\nКлик — играть, правая кнопка — действия";
 
     partial void OnErrorChanged(string? value)
     {
@@ -115,6 +128,9 @@ public sealed partial class SoundItem : ObservableObject
 
     [RelayCommand]
     private void Rename() => host.RequestRename(this);
+
+    [RelayCommand]
+    private void AssignHotkey() => host.RequestHotkey(this);
 
     [RelayCommand]
     private void Delete() => host.Delete(this);

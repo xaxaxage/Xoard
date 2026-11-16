@@ -9,6 +9,7 @@ using Microsoft.UI.Xaml.Media;
 using Microsoft.UI.Xaml.Media.Animation;
 using Soundboard.App.ViewModels;
 using Soundboard.Core.Config;
+using Soundboard.Core.Hotkeys;
 using Soundboard.Core.Library;
 using Windows.ApplicationModel.DataTransfer;
 using Windows.Graphics;
@@ -28,6 +29,7 @@ public sealed partial class MainWindow : Window
         InitializeComponent();
         Vm = new MainViewModel(DispatcherQueue);
         Vm.RenameRequested += item => _ = RenameAsync(item);
+        Vm.HotkeyRequested += item => _ = AssignHotkeyAsync(item);
 
         SystemBackdrop = new MicaBackdrop();
         if (AppWindow.Presenter is OverlappedPresenter presenter)
@@ -147,6 +149,109 @@ public sealed partial class MainWindow : Window
         box.TextChanged += (_, _) => error.Text = "";
         await dialog.ShowAsync();
     }
+
+    /// <summary>
+    /// Запись сочетания: пока диалог открыт, все горячие клавиши сняты, иначе нажатие уже
+    /// назначенного сочетания сработало бы вместо записи.
+    /// </summary>
+    private async Task AssignHotkeyAsync(SoundItem? item)
+    {
+        var current = Vm.CurrentHotkey(item);
+        HotkeyGesture? captured = null;
+
+        var shown = new TextBlock
+        {
+            Text = current ?? "—",
+            Style = (Style)Application.Current.Resources["SubtitleTextBlockStyle"],
+            HorizontalAlignment = HorizontalAlignment.Center,
+        };
+        var error = new TextBlock { Foreground = (Brush)Application.Current.Resources["SystemFillColorCriticalBrush"], TextWrapping = TextWrapping.Wrap };
+        var dialog = new ContentDialog
+        {
+            XamlRoot = Root.XamlRoot,
+            Title = item is null ? "Клавиша «Стоп всё»" : $"Клавиша для «{item.Name}»",
+            Content = new StackPanel
+            {
+                Spacing = 12,
+                MinWidth = 360,
+                Children =
+                {
+                    new TextBlock
+                    {
+                        Text = "Нажмите сочетание клавиш, например Ctrl+Alt+1, F9 или Num5. Esc — отмена.",
+                        TextWrapping = TextWrapping.Wrap,
+                    },
+                    new Border
+                    {
+                        Padding = new Thickness(12),
+                        CornerRadius = new CornerRadius(8),
+                        Background = (Brush)Application.Current.Resources["CardBackgroundFillColorDefaultBrush"],
+                        Child = shown,
+                    },
+                    error,
+                },
+            },
+            PrimaryButtonText = "Сохранить",
+            SecondaryButtonText = current is null ? "" : "Убрать клавишу",
+            CloseButtonText = "Отмена",
+            DefaultButton = ContentDialogButton.Primary,
+            IsPrimaryButtonEnabled = false,
+        };
+
+        dialog.PreviewKeyDown += (_, e) =>
+        {
+            var key = (int)e.Key;
+            if (e.Key == Windows.System.VirtualKey.Escape || HotkeyGesture.IsModifierKey(key))
+                return;   // Esc закрывает диалог; одиночные модификаторы ждём дальше
+
+            var modifiers = HotkeyModifiers.None;
+            if (IsDown(Windows.System.VirtualKey.Control))
+                modifiers |= HotkeyModifiers.Control;
+            if (IsDown(Windows.System.VirtualKey.Menu))
+                modifiers |= HotkeyModifiers.Alt;
+            if (IsDown(Windows.System.VirtualKey.Shift))
+                modifiers |= HotkeyModifiers.Shift;
+            if (IsDown(Windows.System.VirtualKey.LeftWindows) || IsDown(Windows.System.VirtualKey.RightWindows))
+                modifiers |= HotkeyModifiers.Win;
+
+            var gesture = new HotkeyGesture(modifiers, key);
+            e.Handled = true;
+            if (!gesture.IsValid)
+            {
+                error.Text = "Эту клавишу назначить нельзя — выберите другую.";
+                return;
+            }
+
+            captured = gesture;
+            shown.Text = gesture.ToString();
+            error.Text = "";
+            dialog.IsPrimaryButtonEnabled = true;
+        };
+
+        dialog.PrimaryButtonClick += (_, args) =>
+        {
+            var message = Vm.SetHotkey(item, captured);
+            if (message is not null)
+            {
+                error.Text = message;
+                args.Cancel = true;
+            }
+        };
+        dialog.SecondaryButtonClick += (_, _) => Vm.SetHotkey(item, null);
+
+        Vm.SuspendHotkeys();
+        try
+        {
+            await dialog.ShowAsync();
+        }
+        finally
+        {
+            Vm.ResumeHotkeys();
+        }
+    }
+
+    private static bool IsDown(Windows.System.VirtualKey key) =>
+        Microsoft.UI.Input.InputKeyboardSource.GetKeyStateForCurrentThread(key).HasFlag(Windows.UI.Core.CoreVirtualKeyStates.Down);
 
     // ───────── навигация и оформление ─────────
 

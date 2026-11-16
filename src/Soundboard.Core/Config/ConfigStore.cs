@@ -19,6 +19,12 @@ public sealed record AppConfig
     /// <summary>Порядок кнопок: имена файлов в папке звуков.</summary>
     public IReadOnlyList<string> SoundOrder { get; init; } = [];
 
+    /// <summary>Горячие клавиши звуков: имя файла → сочетание («Ctrl+Alt+1»).</summary>
+    public IReadOnlyDictionary<string, string> SoundHotkeys { get; init; } = new Dictionary<string, string>();
+
+    /// <summary>Горячая клавиша «Стоп всё» (null — не назначена).</summary>
+    public string? StopAllHotkey { get; init; }
+
     /// <summary>Анимации интерфейса (выключаются и при отключённых анимациях Windows).</summary>
     public bool AnimationsEnabled { get; init; } = true;
 
@@ -71,7 +77,11 @@ public sealed class ConfigStore
                 var json = File.ReadAllText(Path);
                 var config = JsonSerializer.Deserialize<AppConfig>(json, Options) ?? new AppConfig();
                 config.Audio.Validate();
-                return config with { SoundOrder = config.SoundOrder ?? [] };
+                return config with
+                {
+                    SoundOrder = config.SoundOrder ?? [],
+                    SoundHotkeys = config.SoundHotkeys ?? new Dictionary<string, string>(),
+                };
             }
             catch (Exception ex) when (ex is JsonException or ArgumentOutOfRangeException or NotSupportedException or InvalidOperationException)
             {

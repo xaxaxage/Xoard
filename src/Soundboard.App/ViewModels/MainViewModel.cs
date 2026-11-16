@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Collections.ObjectModel;
 using System.Diagnostics;
 using CommunityToolkit.Mvvm.ComponentModel;
@@ -10,6 +11,7 @@ using Soundboard.Core.Audio.Mic;
 using Soundboard.Core.Audio.Sounds;
 using Soundboard.Core.Audio.Status;
 using Soundboard.Core.Config;
+using Soundboard.Core.Hotkeys;
 using Soundboard.Core.Library;
 
 namespace Soundboard.App.ViewModels;
@@ -37,6 +39,10 @@ public sealed partial class MainViewModel : ObservableObject, IAsyncDisposable
     private readonly DispatcherQueueTimer saveTimer;
     private readonly DispatcherQueueTimer toastTimer;
     private readonly Dictionary<string, SoundItem> byKey = new(StringComparer.Ordinal);
+    private readonly ConcurrentDictionary<string, SoundItem> byFile = new(StringComparer.OrdinalIgnoreCase);
+    private const string StopHotkeyName = "stop";
+    private const string SoundHotkeyPrefix = "sound:";
+    private HotkeyManager? hotkeys;
     private AppConfig config;
     private bool suppressSettings;
     private bool engineRunning;
@@ -92,6 +98,12 @@ public sealed partial class MainViewModel : ObservableObject, IAsyncDisposable
 
     /// <summary>Попросить окно показать диалог переименования.</summary>
     public event Action<SoundItem>? RenameRequested;
+
+    /// <summary>Попросить окно показать диалог назначения клавиши (null — клавиша «Стоп всё»).</summary>
+    public event Action<SoundItem?>? HotkeyRequested;
+
+    /// <summary>Клавиша «Стоп всё» для настроек.</summary>
+    public string StopAllHotkeyText => config.StopAllHotkey ?? "не назначена";
 
     /// <summary>Все звуки в сохранённом порядке.</summary>
     public ObservableCollection<SoundItem> Sounds { get; } = [];
@@ -205,8 +217,14 @@ public sealed partial class MainViewModel : ObservableObject, IAsyncDisposable
     public async Task InitializeAsync()
     {
         foreach (var file in library.Scan(config.SoundOrder))
-            Sounds.Add(new SoundItem(this, file));
+        {
+            var item = new SoundItem(this, file);
+            Sounds.Add(item);
+            byFile[file.FileName] = item;
+        }
+
         RefreshVisible();
+        StartHotkeys();
 
         try
         {
@@ -278,6 +296,149 @@ public sealed partial class MainViewModel : ObservableObject, IAsyncDisposable
 
     public void RequestRename(SoundItem item) => RenameRequested?.Invoke(item);
 
+    public void RequestHotkey(SoundItem? item) => HotkeyRequested?.Invoke(item);
+
+    [RelayCommand]
+    private void AssignStopHotkey() => RequestHotkey(null);
+
+    // ───────── горячие клавиши ─────────
+
+    private void StartHotkeys()
+    {
+        try
+        {
+            hotkeys = new HotkeyManager();
+            hotkeys.Pressed += OnHotkeyPressed;
+        }
+        catch (InvalidOperationException ex)
+        {
+            ShowToast($"Горячие клавиши недоступны: {ex.Message}", InfoBarSeverity.Error);
+            return;
+        }
+
+        var failed = RegisterAllHotkeys();
+        if (failed.Count > 0)
+            ShowToast($"Не удалось включить клавиши (заняты другой программой): {string.Join(", ", failed)}.", InfoBarSeverity.Warning);
+    }
+
+    /// <summary>Регистрирует все сохранённые сочетания; возвращает те, что не удалось.</summary>
+    private List<string> RegisterAllHotkeys()
+    {
+        var failed = new List<string>();
+        if (hotkeys is null)
+            return failed;
+
+        if (HotkeyGesture.TryParse(config.StopAllHotkey, out var stop) && hotkeys.Register(StopHotkeyName, stop) != HotkeyResult.Registered)
+            failed.Add($"«Стоп всё» ({stop})");
+
+        foreach (var (file, text) in config.SoundHotkeys)
+        {
+            if (!byFile.TryGetValue(file, out var item) || !HotkeyGesture.TryParse(text, out var g))
+                continue;
+            item.HotkeyText = g.ToString();
+            if (hotkeys.Register(SoundHotkeyPrefix + file, g) != HotkeyResult.Registered)
+                failed.Add($"«{item.Name}» ({g})");
+        }
+
+        return failed;
+    }
+
+    /// <summary>Поток клавиш: звук запускается сразу, без ожидания потока интерфейса.</summary>
+    private void OnHotkeyPressed(object? sender, HotkeyPressedEventArgs e)
+    {
+        if (e.Name == StopHotkeyName)
+        {
+            engine.StopAll();
+            return;
+        }
+
+        if (!e.Name.StartsWith(SoundHotkeyPrefix, StringComparison.Ordinal)
+            || !byFile.TryGetValue(e.Name[SoundHotkeyPrefix.Length..], out var item))
+        {
+            return;
+        }
+
+        var handle = item.Handle;
+        var options = new PlayOptions();
+        if (handle is null || engine.Play(handle, options).Status == PlayStatus.NotLoaded)
+            dispatcher.TryEnqueue(() => Play(item, previewOnly: false));
+    }
+
+    /// <summary>Снять все клавиши на время назначения новой (иначе нажатие сработает вместо записи).</summary>
+    public void SuspendHotkeys() => hotkeys?.UnregisterAll();
+
+    public void ResumeHotkeys() => RegisterAllHotkeys();
+
+    /// <summary>Текущая клавиша звука (или «Стоп всё», если item = null).</summary>
+    public string? CurrentHotkey(SoundItem? item) =>
+        item is null ? config.StopAllHotkey : config.SoundHotkeys.GetValueOrDefault(item.File.FileName);
+
+    /// <summary>
+    /// Назначить (gesture ≠ null) или убрать клавишу. Возвращает текст ошибки или null.
+    /// Вызывается при снятых клавишах (<see cref="SuspendHotkeys"/>), проверка занятости — пробной регистрацией.
+    /// </summary>
+    public string? SetHotkey(SoundItem? item, HotkeyGesture? gesture)
+    {
+        if (gesture is { } g)
+        {
+            if (!g.IsValid)
+                return "Нужна обычная клавиша вместе с Ctrl/Alt/Shift или без них — одних модификаторов мало.";
+
+            var text = g.ToString();
+            if (item is not null && string.Equals(config.StopAllHotkey, text, StringComparison.OrdinalIgnoreCase))
+                return $"{text} уже назначено на «Стоп всё».";
+            var owner = config.SoundHotkeys.FirstOrDefault(kv =>
+                string.Equals(kv.Value, text, StringComparison.OrdinalIgnoreCase) && (item is null || !string.Equals(kv.Key, item.File.FileName, StringComparison.OrdinalIgnoreCase)));
+            if (owner.Key is not null)
+                return $"{text} уже назначено звуку «{byFile.GetValueOrDefault(owner.Key)?.Name ?? owner.Key}».";
+
+            // Пробная регистрация: сочетание может быть занято другой программой или Windows
+            if (hotkeys is not null)
+            {
+                var probe = hotkeys.Register("probe", g);
+                hotkeys.Unregister("probe");
+                if (probe == HotkeyResult.InUse)
+                    return $"{text} уже занято другой программой или Windows. Выберите другое сочетание.";
+                if (probe != HotkeyResult.Registered)
+                    return $"Windows не дала назначить {text}.";
+            }
+        }
+
+        var gestureText = gesture?.ToString();
+        if (item is null)
+        {
+            config = config with { StopAllHotkey = gestureText };
+            OnPropertyChanged(nameof(StopAllHotkeyText));
+        }
+        else
+        {
+            var map = new Dictionary<string, string>(config.SoundHotkeys, StringComparer.OrdinalIgnoreCase);
+            if (gestureText is null)
+                map.Remove(item.File.FileName);
+            else
+                map[item.File.FileName] = gestureText;
+            config = config with { SoundHotkeys = map };
+            item.HotkeyText = gestureText ?? "";
+        }
+
+        ScheduleSave();
+        return null;
+    }
+
+    private void MoveHotkey(string oldFile, string? newFile)
+    {
+        if (!config.SoundHotkeys.TryGetValue(oldFile, out var text))
+            return;
+        var map = new Dictionary<string, string>(config.SoundHotkeys, StringComparer.OrdinalIgnoreCase);
+        map.Remove(oldFile);
+        if (newFile is not null)
+            map[newFile] = text;
+        config = config with { SoundHotkeys = map };
+        hotkeys?.Unregister(SoundHotkeyPrefix + oldFile);
+        if (newFile is not null && HotkeyGesture.TryParse(text, out var g))
+            hotkeys?.Register(SoundHotkeyPrefix + newFile, g);
+    }
+
     /// <summary>Переименовать; возвращает текст ошибки или null.</summary>
     public string? Rename(SoundItem item, string newName)
     {
@@ -288,6 +449,10 @@ public sealed partial class MainViewModel : ObservableObject, IAsyncDisposable
                 return null;
             if (item.Handle is not null)
                 byKey.Remove(item.Handle.Key);
+            var oldFile = item.File.FileName;
+            byFile.TryRemove(oldFile, out _);
+            byFile[renamed.FileName] = item;
+            MoveHotkey(oldFile, renamed.FileName);
             item.File = renamed;
             item.Name = renamed.Name;
             item.Handle = null;
@@ -311,6 +476,8 @@ public sealed partial class MainViewModel : ObservableObject, IAsyncDisposable
             library.Delete(item.File);
             if (item.Handle is not null)
                 byKey.Remove(item.Handle.Key);
+            byFile.TryRemove(item.File.FileName, out _);
+            MoveHotkey(item.File.FileName, null);
             Sounds.Remove(item);
             VisibleSounds.Remove(item);
             OnSoundsChanged();
@@ -336,6 +503,7 @@ public sealed partial class MainViewModel : ObservableObject, IAsyncDisposable
                 continue;
             var item = new SoundItem(this, file);
             Sounds.Add(item);
+            byFile[file.FileName] = item;
             _ = LoadAsync(item);
         }
 
@@ -706,6 +874,7 @@ public sealed partial class MainViewModel : ObservableObject, IAsyncDisposable
         meterTimer.Stop();
         saveTimer.Stop();
         SaveNow();
+        hotkeys?.Dispose();
         await engine.DisposeAsync().ConfigureAwait(false);
     }
 
