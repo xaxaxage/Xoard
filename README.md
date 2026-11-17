@@ -4,8 +4,29 @@ Xoard — нативный саундборд для Windows: записывае
 их «в микрофон» через виртуальный кабель [VB-CABLE](https://vb-audio.com/Cable/), чтобы их
 слышали в Discord и играх.
 
-> Статус: **этап 6** — трей, автозапуск, проверка VB-CABLE и подсказка по Discord.
-> Push-to-talk пока отложен.
+> Статус: **версия 1.0** — все этапы готовы. Push-to-talk пока отложен.
+
+## Установка для себя
+
+Из папки проекта, в PowerShell или cmd:
+
+```powershell
+.\install.cmd
+```
+
+Собирает Release (около минуты) и ставит Xoard в `%LOCALAPPDATA%\Programs\Xoard` — права
+администратора не нужны, .NET ставить не надо. Ярлыки появляются в меню «Пуск» и на рабочем
+столе, программа сразу запускается. Сервер для Claude Desktop кладётся рядом:
+`%LOCALAPPDATA%\Programs\Xoard\mcp\Xoard.Mcp.exe` — этот путь и указывайте в конфиге Claude
+(он не зависит от папки проекта).
+
+- **Обновить** после изменений в коде — снова `.\install.cmd`. Перед этим закройте Xoard
+  (значок в трее → «Выход») и Claude Desktop: запущенные файлы не перезаписать. Звуки и настройки
+  не трогаются.
+- **Удалить** — `.\install.cmd uninstall`: программа, ярлыки и автозапуск. Звуки
+  (`Документы\Xoard\Sounds`) и настройки (`%LOCALAPPDATA%\Xoard`) остаются.
+- Ещё нужен [VB-CABLE](https://vb-audio.com/Cable/) — программа подскажет, если его нет, а окно
+  «Как настроить Discord» объяснит настройки Discord.
 
 ### Переименование: Soundboard → Xoard
 
@@ -14,7 +35,7 @@ Xoard — нативный саундборд для Windows: записывае
 (настройки и клавиши), а запись автозапуска — на новое имя. Если старую папку переместить
 нельзя, файлы копируются, старые остаются на месте.
 
-В Claude Desktop нужно поправить конфиг: сервер теперь `publish\mcp\Xoard.Mcp.exe` (ключ `"xoard"`),
+В Claude Desktop нужно поправить конфиг: сервер теперь `Xoard.Mcp.exe` (ключ `"xoard"`),
 старый `Soundboard.Mcp.exe` с Xoard не работает.
 
 ## Claude Desktop (MCP)
@@ -22,17 +43,15 @@ Xoard — нативный саундборд для Windows: записывае
 Xoard.Mcp — MCP-сервер (stdio). Claude Desktop запускает его сам, а он передаёт команды
 в открытое приложение Xoard по named pipe `Xoard.Control` (только для вашего пользователя Windows).
 
-1. Собрать сервер одним файлом (нужно один раз и после изменений):
-   ```powershell
-   .\publish-mcp.cmd
-   ```
-   Получится `publish\mcp\Xoard.Mcp.exe` — .NET для него не нужен.
+1. Сервер ставит `.\install.cmd` (см. «Установка для себя»):
+   `%LOCALAPPDATA%\Programs\Xoard\mcp\Xoard.Mcp.exe` — .NET для него не нужен. Для разработки можно
+   собрать отдельно: `.\publish-mcp.cmd` → `publish\mcp\Xoard.Mcp.exe`.
 2. Claude Desktop → Settings → Developer → **Edit Config** и добавить в `claude_desktop_config.json`:
    ```json
    {
      "mcpServers": {
        "xoard": {
-         "command": "C:\\путь\\к\\Xoard\\publish\\mcp\\Xoard.Mcp.exe"
+         "command": "C:\\Users\\<имя>\\AppData\\Local\\Programs\\Xoard\\mcp\\Xoard.Mcp.exe"
        }
      }
    }

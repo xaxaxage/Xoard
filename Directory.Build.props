@@ -8,7 +8,7 @@
     <Deterministic>true</Deterministic>
     <Company>Xoard</Company>
     <Product>Xoard</Product>
-    <Version>0.0.1</Version>
+    <Version>1.0.0</Version>
     <!-- Все bin/obj в artifacts/ в корне: короче пути (лимит Windows 260 символов) и чище дерево -->
     <UseArtifactsOutput>true</UseArtifactsOutput>
   </PropertyGroup>
