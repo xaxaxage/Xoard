@@ -95,6 +95,7 @@ public sealed partial class MainViewModel : ObservableObject, IAsyncDisposable
         suppressSettings = false;
         InitShell();
         InitLook();
+        InitUpdates();
 
         if (store.LoadWarning is { } warning)
             ShowToast(warning, InfoBarSeverity.Warning);
@@ -959,6 +960,7 @@ public sealed partial class MainViewModel : ObservableObject, IAsyncDisposable
     public async ValueTask DisposeAsync()
     {
         meterTimer.Stop();
+        updateTimer?.Stop();
         saveTimer.Stop();
         SaveNow();
         hotkeys?.Dispose();

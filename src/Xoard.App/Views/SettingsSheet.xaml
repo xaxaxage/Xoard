@@ -265,6 +265,40 @@
                         </StackPanel>
                     </Expander>
 
+                    <Expander Header="Обновления и версия" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch">
+                        <StackPanel Spacing="10">
+                            <TextBlock Text="{x:Bind Vm.AppVersionText, Mode=OneWay}" Style="{StaticResource XHead}" />
+                            <ToggleSwitch Header="Проверять, не вышла ли новая версия" IsOn="{x:Bind Vm.CheckForUpdates, Mode=TwoWay}"
+                                          OnContent="Да — скачивается только по кнопке" OffContent="Нет" />
+                            <TextBlock Text="{x:Bind Vm.UpdateStatusText, Mode=OneWay}" Style="{StaticResource XSub}" />
+                            <ProgressBar Maximum="100" Value="{x:Bind Vm.UpdateProgress, Mode=OneWay}" Visibility="{x:Bind Vm.UpdateBusy, Mode=OneWay}" />
+                            <StackPanel Orientation="Horizontal" Spacing="8">
+                                <Button Style="{StaticResource XPrimaryButton}" MinHeight="36" FontSize="14" Command="{x:Bind Vm.InstallUpdateCommand}"
+                                        Content="{x:Bind Vm.UpdateButtonText, Mode=OneWay}" Visibility="{x:Bind Vm.UpdateAvailable, Mode=OneWay}"
+                                        IsEnabled="{x:Bind Vm.UpdateIdle, Mode=OneWay}" CornerRadius="{Binding Control, Source={StaticResource Shape}}" />
+                                <Button Style="{StaticResource XTonalButton}" Command="{x:Bind Vm.CheckUpdatesNowCommand}" Content="Проверить сейчас"
+                                        IsEnabled="{x:Bind Vm.UpdateIdle, Mode=OneWay}" CornerRadius="{Binding Control, Source={StaticResource Shape}}" />
+                            </StackPanel>
+                            <TextBlock Text="Поделиться с другом: ссылка всегда ведёт на установщик последней версии. Другу понадобится и VB-CABLE — Xoard подскажет." Style="{StaticResource XSub}" />
+                            <Button Style="{StaticResource XQuietButton}" Command="{x:Bind Vm.CopySetupLinkCommand}" Padding="0" HorizontalAlignment="Left"
+                                    CornerRadius="{Binding Control, Source={StaticResource Shape}}">
+                                <StackPanel Orientation="Horizontal" Spacing="8">
+                                    <FontIcon Glyph="&#xE8C8;" FontSize="14" />
+                                    <TextBlock Text="Скопировать ссылку на установщик" />
+                                </StackPanel>
+                            </Button>
+                        </StackPanel>
+                    </Expander>
+
+                    <Expander Header="Claude Desktop" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch">
+                        <StackPanel Spacing="10">
+                            <TextBlock Text="Путь к серверу Xoard для claude_desktop_config.json. Он не меняется от обновлений." Style="{StaticResource XSub}" />
+                            <TextBlock Text="{x:Bind Vm.McpPathText}" FontSize="13" TextWrapping="Wrap" IsTextSelectionEnabled="True" />
+                            <Button Style="{StaticResource XTonalButton}" Command="{x:Bind Vm.CopyMcpPathCommand}" Content="Скопировать путь"
+                                    Visibility="{x:Bind Vm.HasMcpPath}" CornerRadius="{Binding Control, Source={StaticResource Shape}}" />
+                        </StackPanel>
+                    </Expander>
+
                     <Expander Header="Папка звуков" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch">
                         <StackPanel Spacing="10">
                             <TextBlock Text="{x:Bind Vm.SoundsFolder}" Style="{StaticResource XSub}" IsTextSelectionEnabled="True" />

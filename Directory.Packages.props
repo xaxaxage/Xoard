@@ -10,5 +10,7 @@
     <PackageVersion Include="CommunityToolkit.Mvvm" Version="8.4.2" />
     <PackageVersion Include="ModelContextProtocol" Version="2.4.0" />
     <PackageVersion Include="Microsoft.Extensions.Hosting" Version="10.0.15" />
+    <!-- Установщик и автообновление (Setup.exe, обновления с GitHub Releases) -->
+    <PackageVersion Include="Velopack" Version="1.2.161" />
   </ItemGroup>
 </Project>

@@ -4,29 +4,35 @@ Xoard — нативный саундборд для Windows: записывае
 их «в микрофон» через виртуальный кабель [VB-CABLE](https://vb-audio.com/Cable/), чтобы их
 слышали в Discord и играх.
 
-> Статус: **версия 1.0** — все этапы готовы. Push-to-talk пока отложен.
+> Статус: **версия 1.1** — новый дизайн и автообновление. Push-to-talk пока отложен.
 
-## Установка для себя
+## Установка
 
-Из папки проекта, в PowerShell или cmd:
+**[Скачать XoardApp-win-Setup.exe](https://github.com/xaxaxage/Xoard/releases/latest/download/XoardApp-win-Setup.exe)** —
+эта ссылка всегда ведёт на последнюю версию, её можно просто отправить другу.
 
-```powershell
-.\install.cmd
-```
-
-Собирает Release (около минуты) и ставит Xoard в `%LOCALAPPDATA%\Programs\Xoard` — права
-администратора не нужны, .NET ставить не надо. Ярлыки появляются в меню «Пуск» и на рабочем
-столе, программа сразу запускается. Сервер для Claude Desktop кладётся рядом:
-`%LOCALAPPDATA%\Programs\Xoard\mcp\Xoard.Mcp.exe` — этот путь и указывайте в конфиге Claude
-(он не зависит от папки проекта).
-
-- **Обновить** после изменений в коде — снова `.\install.cmd`. Перед этим закройте Xoard
-  (значок в трее → «Выход») и Claude Desktop: запущенные файлы не перезаписать. Звуки и настройки
-  не трогаются.
-- **Удалить** — `.\install.cmd uninstall`: программа, ярлыки и автозапуск. Звуки
-  (`Документы\Xoard\Sounds`) и настройки (`%LOCALAPPDATA%\Xoard`) остаются.
-- Ещё нужен [VB-CABLE](https://vb-audio.com/Cable/) — программа подскажет, если его нет, а окно
+- Ставится в `%LOCALAPPDATA%\XoardApp` за пару секунд, права администратора и .NET не нужны;
+  ярлыки — в меню «Пуск» и на рабочем столе.
+- Установщик не подписан сертификатом, поэтому Windows при первом запуске может показать
+  «Windows защитила ваш компьютер» — «Подробнее» → «Выполнить в любом случае».
+- Ещё нужен бесплатный [VB-CABLE](https://vb-audio.com/Cable/) — Xoard подскажет, если его нет, а окно
   «Как настроить Discord» объяснит настройки Discord.
+- **Обновления.** Xoard сам проверяет новые версии (при запуске и раз в 6 часов) и показывает
+  «Вышла версия X — Обновить». Скачивает и ставит только по кнопке (обычно это мегабайт-другой),
+  потом перезапускается. Звуки, клавиши и настройки остаются. Настройки → «Обновления и версия» —
+  проверить вручную, выключить проверку, скопировать ссылку для друга.
+- **Удалить** — «Параметры Windows» → «Приложения» → Xoard. Звуки (`Документы\Xoard\Sounds`) и
+  настройки (`%LOCALAPPDATA%\Xoard`) остаются.
+- Раньше Xoard ставился скриптом `install.cmd` в `%LOCALAPPDATA%\Programs\Xoard`. Чтобы перейти на
+  установщик: закройте Xoard, выполните `.\install.cmd uninstall`, потом запустите Setup.
+
+### Выпуск новой версии (для разработчика)
+
+1. Закоммитить и запушить изменения (`git push`).
+2. `.\release.cmd 1.2.0` — номер больше прошлого. Скрипт собирает программу и сервер для Claude,
+   упаковывает их Velopack (`dotnet tool run vpk`, версия закреплена в `dotnet-tools.json`) и
+   выкладывает выпуск `v1.2.0` в GitHub Releases. Нужен вход в GitHub CLI (`gh auth login`).
+3. У всех, кто поставил Xoard, появится «Вышла версия 1.2.0».
 
 ### Переименование: Soundboard → Xoard
 
@@ -43,15 +49,16 @@ Xoard — нативный саундборд для Windows: записывае
 Xoard.Mcp — MCP-сервер (stdio). Claude Desktop запускает его сам, а он передаёт команды
 в открытое приложение Xoard по named pipe `Xoard.Control` (только для вашего пользователя Windows).
 
-1. Сервер ставит `.\install.cmd` (см. «Установка для себя»):
-   `%LOCALAPPDATA%\Programs\Xoard\mcp\Xoard.Mcp.exe` — .NET для него не нужен. Для разработки можно
-   собрать отдельно: `.\publish-mcp.cmd` → `publish\mcp\Xoard.Mcp.exe`.
+1. Сервер едет вместе с программой. При каждом запуске Xoard кладёт его копию в постоянное место —
+   `%LOCALAPPDATA%\Xoard\mcp\Xoard.Mcp.exe`: путь не меняется от обновлений (Настройки →
+   «Claude Desktop» → «Скопировать путь»). .NET для него не нужен. Для разработки можно собрать
+   отдельно: `.\publish-mcp.cmd` → `publish\mcp\Xoard.Mcp.exe`.
 2. Claude Desktop → Settings → Developer → **Edit Config** и добавить в `claude_desktop_config.json`:
    ```json
    {
      "mcpServers": {
        "xoard": {
-         "command": "C:\\Users\\<имя>\\AppData\\Local\\Programs\\Xoard\\mcp\\Xoard.Mcp.exe"
+         "command": "C:\\Users\\<имя>\\AppData\\Local\\Xoard\\mcp\\Xoard.Mcp.exe"
        }
      }
    }
@@ -76,8 +83,8 @@ Xoard.Mcp — MCP-сервер (stdio). Claude Desktop запускает его
 | `get_status` | устройства, VB-CABLE, громкости, что играет, идёт ли запись, проблемы |
 
 Если Xoard не запущен, Claude получит понятную ошибку «Xoard не запущен».
-После изменений сервера закройте Claude Desktop и заново выполните `.\publish-mcp.cmd`
-(запущенный exe занят и не перезапишется).
+Если при обновлении Xoard сервер был занят Claude Desktop, новая копия ляжет при следующем запуске
+Xoard (старая продолжает работать).
 
 Протокол (`Xoard.Protocol`): одна строка JSON на запрос `{id, command, args}` и ответ
 `{id, ok, result | error{code, message}}`. Команды выполняет `IXoardControl` — к нему же

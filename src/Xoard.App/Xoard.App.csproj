@@ -18,6 +18,8 @@
     <!-- Без этого dotnet publish не кладёт Xoard.pri (разметку окна) — программа падает при запуске -->
     <EnableMsixTooling>true</EnableMsixTooling>
     <SelfContained>true</SelfContained>
+    <!-- Своя точка входа (Program.cs): сначала Velopack, потом WinUI -->
+    <DefineConstants>$(DefineConstants);DISABLE_XAML_GENERATED_MAIN</DefineConstants>
     <!-- Генерированный WinUI-код и XAML не проверяем анализаторами стиля -->
     <NoWarn>$(NoWarn);CA1515;CA1822</NoWarn>
   </PropertyGroup>
@@ -25,6 +27,7 @@
   <ItemGroup>
     <PackageReference Include="Microsoft.WindowsAppSDK.WinUI" />
     <PackageReference Include="CommunityToolkit.Mvvm" />
+    <PackageReference Include="Velopack" />
   </ItemGroup>
 
   <ItemGroup>

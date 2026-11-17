@@ -32,6 +32,20 @@ on first start, see `src/Xoard.Core/Shell/LegacyMigration.cs`).
 - **Git.** Repo-local author `georg`; no AI co-author or session trailers, no model names in commits or code.
   Don't commit `app-playbook.skill`.
 
+## Distribution and updates
+
+- **Velopack** (NuGet `Velopack`, CLI `vpk` pinned in `dotnet-tools.json`). Pack id **`XoardApp`** — not `Xoard`,
+  because Velopack owns `%LOCALAPPDATA%\<packId>` and deletes it on uninstall, while settings live in
+  `%LOCALAPPDATA%\Xoard`. Installer: `XoardApp-win-Setup.exe`; link for friends:
+  `https://github.com/xaxaxage/Xoard/releases/latest/download/XoardApp-win-Setup.exe`.
+- Releases go to the public repo **xaxaxage/Xoard** (GitHub Releases) via `release.cmd <version>`.
+- Updates: check on start and every 6 h; **download and install only when the user presses «Обновить»** (their
+  choice). Own `Program.Main` runs `VelopackApp.Build().Run()` before WinUI (`DISABLE_XAML_GENERATED_MAIN`).
+- The MCP server is copied on each start to a stable path, `%LOCALAPPDATA%\Xoard\mcp\Xoard.Mcp.exe`, so the
+  Claude config never changes and a running server never blocks an update.
+- Commit author stays `georg` (the user chose to keep it public as is).
+- `XOARD_UPDATE_SOURCE=<folder|url>` points the updater at a local release folder for testing.
+
 ## Build and run
 
 .NET 10 SDK lives in `%USERPROFILE%\.dotnet` (not in PATH): `app.cmd` builds and starts the app, `poc.cmd` runs the

@@ -1,5 +1,5 @@
-<Project>
-  <!-- Общие настройки для всех проектов решения -->
+﻿<Project>
+  <!-- РћР±С‰РёРµ РЅР°СЃС‚СЂРѕР№РєРё РґР»СЏ РІСЃРµС… РїСЂРѕРµРєС‚РѕРІ СЂРµС€РµРЅРёСЏ -->
   <PropertyGroup>
     <LangVersion>latest</LangVersion>
     <Nullable>enable</Nullable>
@@ -8,8 +8,8 @@
     <Deterministic>true</Deterministic>
     <Company>Xoard</Company>
     <Product>Xoard</Product>
-    <Version>1.0.0</Version>
-    <!-- Все bin/obj в artifacts/ в корне: короче пути (лимит Windows 260 символов) и чище дерево -->
+    <Version>1.1.0</Version>
+    <!-- Р’СЃРµ bin/obj РІ artifacts/ РІ РєРѕСЂРЅРµ: РєРѕСЂРѕС‡Рµ РїСѓС‚Рё (Р»РёРјРёС‚ Windows 260 СЃРёРјРІРѕР»РѕРІ) Рё С‡РёС‰Рµ РґРµСЂРµРІРѕ -->
     <UseArtifactsOutput>true</UseArtifactsOutput>
   </PropertyGroup>
 </Project>

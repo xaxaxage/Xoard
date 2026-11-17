@@ -45,6 +45,7 @@ public sealed partial class MainWindow : Window
         Vm.TrimRequested += item => _ = TrimAsync(item);
         Vm.SetupGuideRequested += () => _ = ShowSetupGuideAsync();
         Vm.AddSoundsRequested += () => _ = PickSoundsAsync();
+        Vm.UpdateReadyToApply += () => _ = ExitForUpdateAsync();
 
         // Раскладка и настройки; цвета — из палитры (тема Windows только для стандартных мелочей)
         ShowBoard();
@@ -575,6 +576,32 @@ public sealed partial class MainWindow : Window
         AppWindow.Hide();
         tray.Dispose();
         await Vm.DisposeAsync();
+        Close();
+        Application.Current.Exit();
+    }
+
+    /// <summary>
+    /// Обновление скачано: аккуратно остановить звук, сохранить настройки и убрать значок из трея,
+    /// потом Velopack ставит новую версию и запускает её снова.
+    /// </summary>
+    private async Task ExitForUpdateAsync()
+    {
+        if (closing)
+            return;
+        closing = true;
+        RememberPlacement();
+        AppWindow.Hide();
+        tray.Dispose();
+        await Vm.DisposeAsync();
+        try
+        {
+            Vm.ApplyPendingUpdate();
+        }
+        catch (Exception ex) when (ex is not OutOfMemoryException)
+        {
+            CrashLog.Write("не удалось поставить обновление", ex);
+        }
+
         Close();
         Application.Current.Exit();
     }

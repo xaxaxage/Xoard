@@ -52,6 +52,9 @@ public sealed record AppConfig
     /// <summary>Раскладка главного окна: pult, dock или stream.</summary>
     public string Layout { get; init; } = "pult";
 
+    /// <summary>Сама проверять, не вышла ли новая версия (скачивается и ставится только по кнопке).</summary>
+    public bool CheckForUpdates { get; init; } = true;
+
     /// <summary>Шутливые подписи под заголовком и в уведомлениях.</summary>
     public bool HumorEnabled { get; init; } = true;
 
