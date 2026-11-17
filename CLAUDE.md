@@ -14,6 +14,20 @@ on first start, see `src/Xoard.Core/Shell/LegacyMigration.cs`).
 - **Logo.** Flat, in the style of the user's GitHub avatar (solid yellow `#FFEF03`): a yellow audio-editor waveform
   on a near-black (`#141414`) rounded tile. Icons are drawn by a script into `src/Xoard.App/Assets/` (`Xoard.ico`
   for exe/window/tray, `Logo.png` for the window header).
+- **Design (November 2026 redesign).** The user found the stock WinUI look "dry, too Windows" and wanted it in the
+  family of their web apps (calorie and habit trackers), but **stricter, less soft**:
+  - **Strict shape by default**: corners ~6 px, hairline borders instead of soft shadows, **sharp waveforms** (pointed
+    polygons like an audio editor, not rounded bars). A "Мягкая" (soft, 18 px) shape is an option in settings.
+  - **Everything on one page** — no separate Record/Settings pages. Settings are a side sheet; trim is a dialog.
+  - **Three layouts, chosen in settings**: Пульт (grid + right column), Док (big tiles + floating bottom bar),
+    Лента (one column, list). All show a **live waveform of the last 30 s** (replay buffer) moving in the window.
+  - **Palettes** from the trackers (Гавань, Матча, Ягода, Океан, Лаванда, Графит, Ночь, Эспрессо, OLED) plus two in
+    the logo's colors (Xoard, Xoard ночь) and **Авто** (Xoard by day, Xoard ночь with dark Windows). Brushes are
+    changed in place (`Theme/ThemeManager.cs`), stock WinUI keys are mapped to palette brushes.
+  - **Fonts**: Onest (text) + Geologica (titles, big numbers), bundled (OFL) — Cyrillic stand-ins for the trackers'
+    Figtree and Bricolage Grotesque, which have no Cyrillic.
+  - Humor line under the title (switch in settings), dark ink toast pill, quiet animations with an off switch.
+  - Mockups: https://claude.ai/artifact/Q2XkUuqhup1KvAY6SFaxnw
 - **Push-to-talk** is postponed (the user said to skip it for now).
 - **Git.** Repo-local author `georg`; no AI co-author or session trailers, no model names in commits or code.
   Don't commit `app-playbook.skill`.

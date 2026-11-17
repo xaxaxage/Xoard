@@ -57,23 +57,7 @@ public sealed partial class MainViewModel : ObservableObject, IAsyncDisposable
     {
         this.dispatcher = dispatcher;
 
-        // XOARD_DATA_DIR — отдельная папка для настроек и звуков (проверки, не трогая настоящие данные)
-        var dataDir = Environment.GetEnvironmentVariable("XOARD_DATA_DIR");
-        string settingsPath, soundsFolder;
-        if (string.IsNullOrWhiteSpace(dataDir))
-        {
-            // Программа раньше называлась Soundboard — её звуки и настройки переезжают под новое имя
-            var settingsDir = LegacyMigration.MoveFolder(LegacyMigration.LegacySettingsFolder, Path.GetDirectoryName(ConfigStore.DefaultPath)!);
-            var documentsDir = LegacyMigration.MoveFolder(LegacyMigration.LegacyDocumentsFolder, Path.GetDirectoryName(SoundLibrary.DefaultFolder)!);
-            settingsPath = Path.Combine(settingsDir, Path.GetFileName(ConfigStore.DefaultPath));
-            soundsFolder = Path.Combine(documentsDir, Path.GetFileName(SoundLibrary.DefaultFolder));
-        }
-        else
-        {
-            settingsPath = Path.Combine(dataDir, "settings.json");
-            soundsFolder = Path.Combine(dataDir, "Sounds");
-        }
-
+        var (settingsPath, soundsFolder) = ResolveDataPaths();
         store = new ConfigStore(settingsPath);
         config = store.Load();
         library = new SoundLibrary(soundsFolder, new WindowsRecycleBin());
@@ -110,9 +94,26 @@ public sealed partial class MainViewModel : ObservableObject, IAsyncDisposable
         AnimationsEnabled = config.AnimationsEnabled;
         suppressSettings = false;
         InitShell();
+        InitLook();
 
         if (store.LoadWarning is { } warning)
             ShowToast(warning, InfoBarSeverity.Warning);
+    }
+
+    /// <summary>
+    /// Где лежат настройки и звуки. XOARD_DATA_DIR — отдельная папка (проверки, не трогая настоящие
+    /// данные). Программа раньше называлась Soundboard — её папки переезжают под новое имя.
+    /// </summary>
+    public static (string SettingsPath, string SoundsFolder) ResolveDataPaths()
+    {
+        var dataDir = Environment.GetEnvironmentVariable("XOARD_DATA_DIR");
+        if (!string.IsNullOrWhiteSpace(dataDir))
+            return (Path.Combine(dataDir, "settings.json"), Path.Combine(dataDir, "Sounds"));
+
+        var settingsDir = LegacyMigration.MoveFolder(LegacyMigration.LegacySettingsFolder, Path.GetDirectoryName(ConfigStore.DefaultPath)!);
+        var documentsDir = LegacyMigration.MoveFolder(LegacyMigration.LegacyDocumentsFolder, Path.GetDirectoryName(SoundLibrary.DefaultFolder)!);
+        return (Path.Combine(settingsDir, Path.GetFileName(ConfigStore.DefaultPath)),
+                Path.Combine(documentsDir, Path.GetFileName(SoundLibrary.DefaultFolder)));
     }
 
     /// <summary>Попросить окно показать диалог переименования.</summary>
@@ -497,6 +498,7 @@ public sealed partial class MainViewModel : ObservableObject, IAsyncDisposable
         OnPropertyChanged(nameof(StopAllHotkeyText));
         OnPropertyChanged(nameof(RecordHotkeyText));
         OnPropertyChanged(nameof(ReplayHotkeyText));
+        RaiseReplayTexts();
         ScheduleSave();
         return null;
     }
@@ -617,6 +619,7 @@ public sealed partial class MainViewModel : ObservableObject, IAsyncDisposable
         {
             var handle = await engine.LoadAsync(item.File.Path).ConfigureAwait(true);
             item.SetLoaded(handle);
+            item.Wave = engine.Waveform(handle, 64);
             byKey[handle.Key] = item;
         }
         catch (SoundLoadException ex)
@@ -890,6 +893,7 @@ public sealed partial class MainViewModel : ObservableObject, IAsyncDisposable
     {
         UpdateRecordingUi();
         TickSetupChecks();
+        UpdateLiveWave();
         if (!engineRunning)
             return;
         var m = engine.ReadMeters();

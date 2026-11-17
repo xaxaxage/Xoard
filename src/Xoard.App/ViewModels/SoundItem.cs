@@ -39,10 +39,17 @@ public sealed partial class SoundItem : ObservableObject
     public partial string? Error { get; set; }
 
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsNotPlaying))]
     public partial bool IsPlaying { get; set; }
+
+    public bool IsNotPlaying => !IsPlaying;
 
     [ObservableProperty]
     public partial double Progress { get; set; }
+
+    /// <summary>Огибающая для волны на плитке (0..1) или null, пока не загружен.</summary>
+    [ObservableProperty]
+    public partial float[]? Wave { get; set; }
 
     /// <summary>Горячая клавиша («Ctrl+Alt+1») или пусто.</summary>
     [ObservableProperty]

@@ -9,10 +9,182 @@
                 <XamlControlsResources xmlns="using:Microsoft.UI.Xaml.Controls" />
             </ResourceDictionary.MergedDictionaries>
 
-            <!-- Плитка звука: мягкая карточка без рамки -->
-            <x:Double x:Key="TileWidth">150</x:Double>
-            <x:Double x:Key="TileHeight">78</x:Double>
-            <CornerRadius x:Key="TileCornerRadius">8</CornerRadius>
+            <!-- Шрифты (SIL OFL, лежат рядом с программой): Onest — текст, Geologica — заголовки и большие числа -->
+            <FontFamily x:Key="XFontText">ms-appx:///Assets/Fonts/Onest.ttf#Onest</FontFamily>
+            <FontFamily x:Key="XFontDisplay">ms-appx:///Assets/Fonts/Geologica.ttf#Geologica</FontFamily>
+            <FontFamily x:Key="ContentControlThemeFontFamily">ms-appx:///Assets/Fonts/Onest.ttf#Onest</FontFamily>
+
+            <!-- Цвета палитры. Здесь — значения Xoard; Theme/ThemeManager.cs меняет цвет этих же кистей на месте,
+                 поэтому всё, что на них ссылается, перекрашивается сразу. Форма (Shape) кладётся из кода. -->
+            <SolidColorBrush x:Key="XBg" Color="#F5F3EA" />
+            <SolidColorBrush x:Key="XSurface" Color="#FFFFFF" />
+            <SolidColorBrush x:Key="XSunken" Color="#EBE8DC" />
+            <SolidColorBrush x:Key="XLine" Color="#E0DCCB" />
+            <SolidColorBrush x:Key="XInk" Color="#141414" />
+            <SolidColorBrush x:Key="XMuted" Color="#5A5850" />
+            <SolidColorBrush x:Key="XPrimary" Color="#141414" />
+            <SolidColorBrush x:Key="XPrimarySoft" Color="#FFF6B0" />
+            <SolidColorBrush x:Key="XOnPrimary" Color="#FFEF03" />
+            <SolidColorBrush x:Key="XAccent" Color="#FFE600" />
+            <SolidColorBrush x:Key="XAccentSoft" Color="#FFF8C2" />
+            <SolidColorBrush x:Key="XOnAccent" Color="#141414" />
+            <SolidColorBrush x:Key="XTrack" Color="#E8E4D3" />
+            <SolidColorBrush x:Key="XWave" Color="#C4BE9F" />
+            <SolidColorBrush x:Key="XScrim" Color="#5C141414" />
+            <SolidColorBrush x:Key="XRecording" Color="#E5484D" />
+
+            <!-- Кнопка без системных подсветок: при наведении — лёгкий оттенок цвета текста, при нажатии чуть «проседает» -->
+            <Style x:Key="XButton" TargetType="Button">
+                <Setter Property="Background" Value="Transparent" />
+                <Setter Property="Foreground" Value="{StaticResource XInk}" />
+                <Setter Property="BorderBrush" Value="Transparent" />
+                <Setter Property="BorderThickness" Value="0" />
+                <Setter Property="Padding" Value="14,0" />
+                <Setter Property="MinHeight" Value="36" />
+                <Setter Property="FontSize" Value="14" />
+                <Setter Property="FontWeight" Value="SemiBold" />
+                <Setter Property="HorizontalContentAlignment" Value="Center" />
+                <Setter Property="VerticalContentAlignment" Value="Center" />
+                <Setter Property="UseSystemFocusVisuals" Value="True" />
+                <Setter Property="FocusVisualMargin" Value="-3" />
+                <Setter Property="Template">
+                    <Setter.Value>
+                        <ControlTemplate TargetType="Button">
+                            <Grid x:Name="RootGrid" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}"
+                                  BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="{TemplateBinding CornerRadius}" RenderTransformOrigin="0.5,0.5">
+                                <Grid.RenderTransform>
+                                    <ScaleTransform x:Name="PressScale" />
+                                </Grid.RenderTransform>
+                                <Border x:Name="HoverTint" Background="{TemplateBinding Foreground}" Opacity="0" CornerRadius="{TemplateBinding CornerRadius}" />
+                                <ContentPresenter x:Name="ContentPresenter" Content="{TemplateBinding Content}" ContentTemplate="{TemplateBinding ContentTemplate}"
+                                                  Padding="{TemplateBinding Padding}" Foreground="{TemplateBinding Foreground}"
+                                                  HorizontalContentAlignment="{TemplateBinding HorizontalContentAlignment}"
+                                                  VerticalContentAlignment="{TemplateBinding VerticalContentAlignment}" />
+                                <VisualStateManager.VisualStateGroups>
+                                    <VisualStateGroup x:Name="CommonStates">
+                                        <VisualState x:Name="Normal" />
+                                        <VisualState x:Name="PointerOver">
+                                            <VisualState.Setters>
+                                                <Setter Target="HoverTint.Opacity" Value="0.08" />
+                                            </VisualState.Setters>
+                                        </VisualState>
+                                        <VisualState x:Name="Pressed">
+                                            <Storyboard>
+                                                <DoubleAnimation Storyboard.TargetName="PressScale" Storyboard.TargetProperty="ScaleX" To="0.97" Duration="0:0:0.12" />
+                                                <DoubleAnimation Storyboard.TargetName="PressScale" Storyboard.TargetProperty="ScaleY" To="0.97" Duration="0:0:0.12" />
+                                                <DoubleAnimation Storyboard.TargetName="HoverTint" Storyboard.TargetProperty="Opacity" To="0.14" Duration="0" />
+                                            </Storyboard>
+                                        </VisualState>
+                                        <VisualState x:Name="Disabled">
+                                            <VisualState.Setters>
+                                                <Setter Target="RootGrid.Opacity" Value="0.45" />
+                                            </VisualState.Setters>
+                                        </VisualState>
+                                    </VisualStateGroup>
+                                </VisualStateManager.VisualStateGroups>
+                            </Grid>
+                        </ControlTemplate>
+                    </Setter.Value>
+                </Setter>
+            </Style>
+
+            <!-- Главное действие экрана: залитая кнопка -->
+            <Style x:Key="XPrimaryButton" TargetType="Button" BasedOn="{StaticResource XButton}">
+                <Setter Property="Background" Value="{StaticResource XPrimary}" />
+                <Setter Property="Foreground" Value="{StaticResource XOnPrimary}" />
+                <Setter Property="FontSize" Value="16" />
+                <Setter Property="FontWeight" Value="Bold" />
+                <Setter Property="MinHeight" Value="44" />
+                <Setter Property="Padding" Value="18,0" />
+            </Style>
+
+            <!-- Второстепенные действия: тональная заливка -->
+            <Style x:Key="XTonalButton" TargetType="Button" BasedOn="{StaticResource XButton}">
+                <Setter Property="Background" Value="{StaticResource XPrimarySoft}" />
+                <Setter Property="Foreground" Value="{StaticResource XPrimary}" />
+            </Style>
+
+            <!-- Тихие действия: только текст основного цвета -->
+            <Style x:Key="XQuietButton" TargetType="Button" BasedOn="{StaticResource XButton}">
+                <Setter Property="Foreground" Value="{StaticResource XPrimary}" />
+                <Setter Property="Padding" Value="10,0" />
+            </Style>
+
+            <!-- Значок без плашки -->
+            <Style x:Key="XIconButton" TargetType="Button" BasedOn="{StaticResource XButton}">
+                <Setter Property="Foreground" Value="{StaticResource XMuted}" />
+                <Setter Property="Width" Value="40" />
+                <Setter Property="Height" Value="40" />
+                <Setter Property="Padding" Value="0" />
+            </Style>
+
+            <!-- Сегмент переключателя («Звук компьютера | Микрофон», «Строгая | Мягкая») -->
+            <Style x:Key="XSegment" TargetType="RadioButton">
+                <Setter Property="Foreground" Value="{StaticResource XMuted}" />
+                <Setter Property="FontSize" Value="14" />
+                <Setter Property="FontWeight" Value="SemiBold" />
+                <Setter Property="MinHeight" Value="34" />
+                <Setter Property="MinWidth" Value="0" />
+                <Setter Property="HorizontalAlignment" Value="Stretch" />
+                <Setter Property="HorizontalContentAlignment" Value="Center" />
+                <Setter Property="UseSystemFocusVisuals" Value="True" />
+                <Setter Property="Template">
+                    <Setter.Value>
+                        <ControlTemplate TargetType="RadioButton">
+                            <Border x:Name="Segment" Background="Transparent" BorderBrush="Transparent" BorderThickness="1" CornerRadius="{TemplateBinding CornerRadius}">
+                                <ContentPresenter x:Name="Content" Content="{TemplateBinding Content}" Foreground="{TemplateBinding Foreground}"
+                                                  HorizontalAlignment="Center" VerticalAlignment="Center" Margin="10,0" />
+                                <VisualStateManager.VisualStateGroups>
+                                    <VisualStateGroup x:Name="CheckStates">
+                                        <VisualState x:Name="Checked">
+                                            <VisualState.Setters>
+                                                <Setter Target="Segment.Background" Value="{StaticResource XSurface}" />
+                                                <Setter Target="Segment.BorderBrush" Value="{StaticResource XLine}" />
+                                                <Setter Target="Content.Foreground" Value="{StaticResource XInk}" />
+                                            </VisualState.Setters>
+                                        </VisualState>
+                                        <VisualState x:Name="Unchecked" />
+                                        <VisualState x:Name="Indeterminate" />
+                                    </VisualStateGroup>
+                                    <VisualStateGroup x:Name="CommonStates">
+                                        <VisualState x:Name="Normal" />
+                                        <VisualState x:Name="PointerOver" />
+                                        <VisualState x:Name="Pressed" />
+                                        <VisualState x:Name="Disabled">
+                                            <VisualState.Setters>
+                                                <Setter Target="Segment.Opacity" Value="0.45" />
+                                            </VisualState.Setters>
+                                        </VisualState>
+                                    </VisualStateGroup>
+                                </VisualStateManager.VisualStateGroups>
+                            </Border>
+                        </ControlTemplate>
+                    </Setter.Value>
+                </Setter>
+            </Style>
+
+            <!-- Подписи -->
+            <Style x:Key="XTitle" TargetType="TextBlock">
+                <Setter Property="FontFamily" Value="{StaticResource XFontDisplay}" />
+                <Setter Property="FontWeight" Value="Bold" />
+                <Setter Property="FontSize" Value="22" />
+                <Setter Property="Foreground" Value="{StaticResource XInk}" />
+            </Style>
+            <Style x:Key="XHead" TargetType="TextBlock">
+                <Setter Property="FontSize" Value="16" />
+                <Setter Property="FontWeight" Value="SemiBold" />
+                <Setter Property="Foreground" Value="{StaticResource XInk}" />
+            </Style>
+            <Style x:Key="XSub" TargetType="TextBlock">
+                <Setter Property="FontSize" Value="14" />
+                <Setter Property="Foreground" Value="{StaticResource XMuted}" />
+                <Setter Property="TextWrapping" Value="Wrap" />
+            </Style>
+            <Style x:Key="XCap" TargetType="TextBlock">
+                <Setter Property="FontSize" Value="12" />
+                <Setter Property="FontWeight" Value="SemiBold" />
+                <Setter Property="Foreground" Value="{StaticResource XMuted}" />
+            </Style>
         </ResourceDictionary>
     </Application.Resources>
 </Application>

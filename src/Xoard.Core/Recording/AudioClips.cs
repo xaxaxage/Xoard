@@ -45,6 +45,40 @@ public static class AudioClips
         File.Move(temp, path, overwrite: true);
     }
 
+    /// <summary>
+    /// Огибающая для маленькой волны на плитке: наибольшая громкость каждого из
+    /// <paramref name="buckets"/> отрезков (0..1), нормированная по самому громкому месту,
+    /// чтобы и тихий звук был виден.
+    /// </summary>
+    public static float[] Envelope(ReadOnlySpan<float> stereo, int buckets)
+    {
+        ArgumentOutOfRangeException.ThrowIfLessThan(buckets, 1);
+        var result = new float[buckets];
+        var frames = stereo.Length / 2;
+        if (frames == 0)
+            return result;
+
+        var max = 0f;
+        for (var b = 0; b < buckets; b++)
+        {
+            var from = (int)((long)b * frames / buckets);
+            var to = Math.Max(from + 1, (int)((long)(b + 1) * frames / buckets));
+            var peak = 0f;
+            for (var f = from; f < to && f < frames; f++)
+                peak = Math.Max(peak, Math.Max(Math.Abs(stereo[2 * f]), Math.Abs(stereo[(2 * f) + 1])));
+            result[b] = peak;
+            max = Math.Max(max, peak);
+        }
+
+        if (max > 1e-4f)
+        {
+            for (var b = 0; b < buckets; b++)
+                result[b] = MathF.Min(1f, result[b] / max);
+        }
+
+        return result;
+    }
+
     /// <summary>Пики для отрисовки: <paramref name="buckets"/> столбиков по моно-сумме каналов.</summary>
     public static WavePeak[] Peaks(float[] stereo, int buckets)
     {

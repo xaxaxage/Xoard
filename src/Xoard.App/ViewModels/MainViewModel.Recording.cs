@@ -76,8 +76,11 @@ public sealed partial class MainViewModel
         ? "Пишется всё, что звучит в компьютере (видео, игры, Discord), кроме звуков самого Xoard."
         : "Пишется микрофон из настроек.";
 
+    public bool IsNotRecording => !IsRecording;
+
     partial void OnIsRecordingChanged(bool value)
     {
+        OnPropertyChanged(nameof(IsNotRecording));
         OnPropertyChanged(nameof(RecordButtonText));
         OnPropertyChanged(nameof(RecordButtonGlyph));
     }
@@ -85,6 +88,10 @@ public sealed partial class MainViewModel
     partial void OnRecordSourceIndexChanged(int value)
     {
         OnPropertyChanged(nameof(RecordSourceHint));
+        OnPropertyChanged(nameof(RecordFromSystem));
+        OnPropertyChanged(nameof(RecordFromMic));
+        OnPropertyChanged(nameof(RecordSourceShort));
+        OnPropertyChanged(nameof(RecordSourceGlyph));
         if (suppressSettings)
             return;
         config = config with { RecordSource = value == 1 ? RecordingSource.Microphone : RecordingSource.System };
@@ -93,6 +100,7 @@ public sealed partial class MainViewModel
 
     partial void OnReplayEnabledChanged(bool value)
     {
+        RaiseReplayTexts();
         if (suppressSettings)
             return;
         config = config with { ReplayEnabled = value };
@@ -103,6 +111,7 @@ public sealed partial class MainViewModel
     partial void OnReplaySecondsChanged(double value)
     {
         OnPropertyChanged(nameof(ReplaySaveText));
+        RaiseReplayTexts();
         if (suppressSettings)
             return;
         config = config with { ReplaySeconds = (int)Math.Round(value) };

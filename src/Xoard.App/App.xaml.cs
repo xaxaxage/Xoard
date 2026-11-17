@@ -40,6 +40,10 @@ public partial class App : Application
 
         try
         {
+            // Палитра и форма — до создания окна: на них ссылаются стили и элементы
+            var config = new Xoard.Core.Config.ConfigStore(ViewModels.MainViewModel.ResolveDataPaths().SettingsPath).Load();
+            Theme.ThemeManager.Install(Resources, config.Palette, Theme.ThemeManager.WindowsIsDark(), config.Shape);
+
             // --tray — автозапуск с Windows: сразу в трей, без окна
             var hidden = Environment.GetCommandLineArgs().Skip(1)
                 .Any(a => string.Equals(a, Autostart.TrayArgument, StringComparison.OrdinalIgnoreCase));

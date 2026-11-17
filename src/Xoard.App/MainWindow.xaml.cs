@@ -44,12 +44,18 @@ public sealed partial class MainWindow : Window
         Vm.HotkeyRequested += target => _ = AssignHotkeyAsync(target);
         Vm.TrimRequested += item => _ = TrimAsync(item);
         Vm.SetupGuideRequested += () => _ = ShowSetupGuideAsync();
+        Vm.AddSoundsRequested += () => _ = PickSoundsAsync();
 
-        SystemBackdrop = new MicaBackdrop();
+        // Раскладка и настройки; цвета — из палитры (тема Windows только для стандартных мелочей)
+        ShowBoard();
+        SheetHost.Content = new Views.SettingsSheet(Vm);
+        ApplyPaletteToWindow();
+        Theme.ThemeManager.Current.Changed += ApplyPaletteToWindow;
+
         if (AppWindow.Presenter is OverlappedPresenter presenter)
         {
-            presenter.PreferredMinimumWidth = 760;
-            presenter.PreferredMinimumHeight = 520;
+            presenter.PreferredMinimumWidth = 900;
+            presenter.PreferredMinimumHeight = 600;
         }
 
         var iconPath = Path.Combine(AppContext.BaseDirectory, "Assets", "Xoard.ico");
@@ -61,22 +67,15 @@ public sealed partial class MainWindow : Window
         tray.Command += (_, command) => DispatcherQueue.TryEnqueue(() => OnTrayCommand(command));
 
         RestorePlacement(Vm.SavedWindow);
-        // Пункт «Настройки» появляется только после загрузки шаблона NavigationView
-        Nav.Loaded += (_, _) =>
-        {
-            if (Nav.SettingsItem is NavigationViewItem settingsItem)
-            {
-                settingsItem.Content = "Настройки";
-                Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(settingsItem, "Настройки");
-            }
-        };
-        ApplyAnimationSetting();
         Vm.PropertyChanged += (_, e) =>
         {
             switch (e.PropertyName)
             {
-                case nameof(MainViewModel.AnimationsEnabled):
-                    ApplyAnimationSetting();
+                case nameof(MainViewModel.SettingsOpen):
+                    ShowSettings(Vm.SettingsOpen);
+                    break;
+                case nameof(MainViewModel.LayoutId):
+                    ShowBoard();
                     break;
                 case nameof(MainViewModel.MicMuted):
                     tray.MicMuted = Vm.MicMuted;
@@ -106,33 +105,58 @@ public sealed partial class MainWindow : Window
 
     private bool AnimationsOn => Vm.AnimationsEnabled && uiSettings.AnimationsEnabled;
 
+    // ───────── палитра, настройки, уведомления ─────────
+
+    /// <summary>Цвета заголовка окна и тема стандартных элементов — под палитру.</summary>
+    private void ApplyPaletteToWindow()
+    {
+        var theme = Theme.ThemeManager.Current;
+        Root.RequestedTheme = theme.ElementTheme;
+        SetupGuide.RequestedTheme = theme.ElementTheme;
+        if (!AppWindowTitleBar.IsCustomizationSupported())
+            return;
+        var bar = AppWindow.TitleBar;
+        bar.BackgroundColor = bar.InactiveBackgroundColor = theme["Bg"];
+        bar.ButtonBackgroundColor = bar.ButtonInactiveBackgroundColor = theme["Bg"];
+        bar.ForegroundColor = bar.ButtonForegroundColor = theme["Ink"];
+        bar.InactiveForegroundColor = bar.ButtonInactiveForegroundColor = theme["Muted"];
+        bar.ButtonHoverBackgroundColor = theme["Sunken"];
+        bar.ButtonHoverForegroundColor = theme["Ink"];
+        bar.ButtonPressedBackgroundColor = theme["Line"];
+        bar.ButtonPressedForegroundColor = theme["Ink"];
+    }
+
+    /// <summary>Раскладка главного окна: Пульт, Док или Лента (меняется на лету из настроек).</summary>
+    private void ShowBoard() => BoardHost.Content = Vm.LayoutId switch
+    {
+        "dock" => new Views.DockView(Vm),
+        "stream" => new Views.StreamView(Vm),
+        _ => new Views.PultView(Vm),
+    };
+
+    private void ShowSettings(bool open)
+    {
+        SettingsLayer.Visibility = open ? Visibility.Visible : Visibility.Collapsed;
+        if (open)
+            Views.Motion.SlideIn(SheetHost, AnimationsOn);
+    }
+
+    private void OnScrimTapped(object sender, Microsoft.UI.Xaml.Input.TappedRoutedEventArgs e) => Vm.SettingsOpen = false;
+
+    private void OnToastTapped(object sender, Microsoft.UI.Xaml.Input.TappedRoutedEventArgs e) => Vm.ToastOpen = false;
+
+    private void OnRootKeyDown(object sender, Microsoft.UI.Xaml.Input.KeyRoutedEventArgs e)
+    {
+        if (e.Key == Windows.System.VirtualKey.Escape && Vm.SettingsOpen)
+        {
+            Vm.SettingsOpen = false;
+            e.Handled = true;
+        }
+    }
+
     // ───────── звуки ─────────
 
-    private void OnSoundClick(object sender, ItemClickEventArgs e)
-    {
-        if (e.ClickedItem is not SoundItem item)
-            return;
-        Vm.Play(item, previewOnly: false);
-        if (AnimationsOn && SoundsGrid.ContainerFromItem(item) is GridViewItem container)
-            Pop(container);
-    }
-
-    /// <summary>Короткое «нажатие» плитки: 1 → 0,94 → 1 за 0,18 с.</summary>
-    private static void Pop(UIElement element)
-    {
-        var visual = ElementCompositionPreview.GetElementVisual(element);
-        var compositor = visual.Compositor;
-        visual.CenterPoint = new Vector3((float)element.ActualSize.X / 2, (float)element.ActualSize.Y / 2, 0);
-        var animation = compositor.CreateVector3KeyFrameAnimation();
-        animation.InsertKeyFrame(0.35f, new Vector3(0.94f, 0.94f, 1));
-        animation.InsertKeyFrame(1f, Vector3.One);
-        animation.Duration = TimeSpan.FromMilliseconds(180);
-        visual.StartAnimation("Scale", animation);
-    }
-
-    private void OnDragItemsCompleted(ListViewBase sender, DragItemsCompletedEventArgs args) => Vm.OnReordered();
-
-    private async void OnAddSoundsClick(object sender, RoutedEventArgs e)
+    private async Task PickSoundsAsync()
     {
         var picker = new FileOpenPicker { SuggestedStartLocation = PickerLocationId.MusicLibrary };
         foreach (var ext in SoundLibrary.SupportedExtensions)
@@ -171,6 +195,7 @@ public sealed partial class MainWindow : Window
         var dialog = new ContentDialog
         {
             XamlRoot = Root.XamlRoot,
+            RequestedTheme = Theme.ThemeManager.Current.ElementTheme,
             Title = "Переименовать звук",
             Content = new StackPanel { Spacing = 8, Children = { box, error } },
             PrimaryButtonText = "Сохранить",
@@ -209,6 +234,7 @@ public sealed partial class MainWindow : Window
         var dialog = new ContentDialog
         {
             XamlRoot = Root.XamlRoot,
+            RequestedTheme = Theme.ThemeManager.Current.ElementTheme,
             Title = target.Title,
             Content = new StackPanel
             {
@@ -324,19 +350,19 @@ public sealed partial class MainWindow : Window
         var wave = new Microsoft.UI.Xaml.Shapes.Path
         {
             Data = new PathGeometry { Figures = { figure } },
-            Fill = (Brush)Application.Current.Resources["TextFillColorSecondaryBrush"],
+            Fill = (Brush)Application.Current.Resources["XWave"],
         };
         var selectionRect = new Microsoft.UI.Xaml.Shapes.Rectangle
         {
             Height = height,
-            Fill = (Brush)Application.Current.Resources["AccentFillColorDefaultBrush"],
-            Opacity = 0.28,
+            Fill = (Brush)Application.Current.Resources["XPrimary"],
+            Opacity = 0.22,
         };
         var canvas = new Canvas
         {
             Width = width,
             Height = height,
-            Background = (Brush)Application.Current.Resources["CardBackgroundFillColorDefaultBrush"],
+            Background = (Brush)Application.Current.Resources["XBg"],
             Children = { wave, selectionRect },
         };
 
@@ -395,6 +421,7 @@ public sealed partial class MainWindow : Window
         var dialog = new ContentDialog
         {
             XamlRoot = Root.XamlRoot,
+            RequestedTheme = Theme.ThemeManager.Current.ElementTheme,
             Title = $"Обрезка «{item.Name}»",
             Content = new StackPanel
             {
@@ -440,30 +467,13 @@ public sealed partial class MainWindow : Window
     private static bool IsDown(Windows.System.VirtualKey key) =>
         Microsoft.UI.Input.InputKeyboardSource.GetKeyStateForCurrentThread(key).HasFlag(Windows.UI.Core.CoreVirtualKeyStates.Down);
 
-    // ───────── навигация и оформление ─────────
-
-    private void OnNavigationChanged(NavigationView sender, NavigationViewSelectionChangedEventArgs args)
-    {
-        var settings = args.IsSettingsSelected;
-        var recording = !settings && ReferenceEquals(args.SelectedItem, RecordNavItem);
-        SoundsPanel.Visibility = settings || recording ? Visibility.Collapsed : Visibility.Visible;
-        RecordingPanel.Visibility = recording ? Visibility.Visible : Visibility.Collapsed;
-        SettingsPanel.Visibility = settings ? Visibility.Visible : Visibility.Collapsed;
-    }
-
-    private void ApplyAnimationSetting()
-    {
-        // Без анимаций — без переходов появления/перестановки плиток
-        SoundsGrid.ItemContainerTransitions = AnimationsOn
-            ? [new EntranceThemeTransition { IsStaggeringEnabled = true }, new AddDeleteThemeTransition(), new ReorderThemeTransition()]
-            : [];
-    }
+    // ───────── окно ─────────
 
     private void RestorePlacement(WindowPlacement? placement)
     {
         if (placement is null || placement.Width < 400 || placement.Height < 300)
         {
-            AppWindow.Resize(new SizeInt32(1040, 720));
+            AppWindow.Resize(new SizeInt32(1180, 800));
             return;
         }
 

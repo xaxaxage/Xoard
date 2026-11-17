@@ -140,6 +140,18 @@ public sealed class AudioEngine : IAudioEngine
     /// <inheritdoc />
     public SoundHandle AddSound(string name, DecodedSound sound) => cache.AddInMemory(name, sound);
 
+    /// <summary>
+    /// Огибающая загруженного звука для маленькой волны на плитке (0..1, <paramref name="buckets"/>
+    /// отрезков). null — звук уже вытеснен из памяти.
+    /// </summary>
+    public float[]? Waveform(SoundHandle sound, int buckets)
+    {
+        ArgumentNullException.ThrowIfNull(sound);
+        return cache.TryGet(sound.Key, out var decoded)
+            ? Xoard.Core.Recording.AudioClips.Envelope(decoded.Samples, buckets)
+            : null;
+    }
+
     /// <inheritdoc />
     public PlayResult Play(SoundHandle sound, PlayOptions? options = null)
     {

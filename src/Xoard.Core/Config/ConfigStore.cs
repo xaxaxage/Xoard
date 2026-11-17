@@ -43,6 +43,18 @@ public sealed record AppConfig
     /// <summary>Анимации интерфейса (выключаются и при отключённых анимациях Windows).</summary>
     public bool AnimationsEnabled { get; init; } = true;
 
+    /// <summary>Палитра: auto (по теме Windows), xoard, xoard-night, harbor, … (см. Palettes в приложении).</summary>
+    public string Palette { get; init; } = "auto";
+
+    /// <summary>Форма: strict (почти прямые углы, тонкие линии) или soft (скруглённые карточки).</summary>
+    public string Shape { get; init; } = "strict";
+
+    /// <summary>Раскладка главного окна: pult, dock или stream.</summary>
+    public string Layout { get; init; } = "pult";
+
+    /// <summary>Шутливые подписи под заголовком и в уведомлениях.</summary>
+    public bool HumorEnabled { get; init; } = true;
+
     /// <summary>Кнопка ✕ прячет окно в трей (программа продолжает работать), а не закрывает её.</summary>
     public bool CloseToTray { get; init; } = true;
 

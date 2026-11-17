@@ -46,6 +46,11 @@ public sealed class RecordingService : IAsyncDisposable
     private bool replayEnabled;
     private int replaySeconds = 30;
 
+    // Живая волна повтора: пик каждых 50 мс за последние 2 минуты
+    private readonly PeakHistory livePeaks = new((int)(120 / LivePeakSeconds));
+    private float liveMax;
+    private int liveFrames;
+
     // Текущая запись
     private RecordingSource? recording;
     private List<float[]> chunks = [];
@@ -67,6 +72,15 @@ public sealed class RecordingService : IAsyncDisposable
         this.clock = clock;
         this.ticksPerSecond = ticksPerSecond;
     }
+
+    /// <summary>Длина одного отрезка живой волны, секунд.</summary>
+    public const double LivePeakSeconds = 0.05;
+
+    /// <summary>
+    /// Последние пики звука компьютера (0..1, по 50 мс, новый — в конце) для живой волны.
+    /// Пока повтор выключен, волна пустая. Возвращает, сколько отрезков настоящих.
+    /// </summary>
+    public int CopyLivePeaks(Span<float> dest) => livePeaks.CopyLatest(dest);
 
     /// <summary>Последняя ошибка (по-русски) или null.</summary>
     public string? LastError { get; private set; }
@@ -143,6 +157,9 @@ public sealed class RecordingService : IAsyncDisposable
                 ring = null;           // пересоздадим под новую длину
                 ringWritten = 0;
             }
+
+            if (!enabled)
+                livePeaks.Clear();
 
             replaySeconds = seconds;
         }
@@ -435,6 +452,7 @@ public sealed class RecordingService : IAsyncDisposable
     {
         if (ring is not null)
         {
+            TrackLivePeaks(stereo);
             var frames = stereo.Length / 2;
             var offset = 0;
             while (offset < frames)
@@ -449,6 +467,24 @@ public sealed class RecordingService : IAsyncDisposable
 
         if (recording == RecordingSource.System)
             AppendRecording(stereo);
+    }
+
+    /// <summary>Пик каждого отрезка по 50 мс — для живой волны в окне (под блокировкой).</summary>
+    private void TrackLivePeaks(ReadOnlySpan<float> stereo)
+    {
+        var bucket = Math.Max(1, (int)(systemRate * LivePeakSeconds));
+        for (var i = 0; i + 1 < stereo.Length; i += 2)
+        {
+            var v = Math.Max(Math.Abs(stereo[i]), Math.Abs(stereo[i + 1]));
+            if (v > liveMax)
+                liveMax = v;
+            if (++liveFrames >= bucket)
+            {
+                livePeaks.Add(Math.Min(1f, liveMax));
+                liveMax = 0;
+                liveFrames = 0;
+            }
+        }
     }
 
     // ───────── микрофон ─────────

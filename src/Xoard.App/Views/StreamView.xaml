@@ -1,0 +1,280 @@
+<?xml version="1.0" encoding="utf-8"?>
+<UserControl
+    x:Class="Xoard.App.Views.StreamView"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:vm="using:Xoard.App.ViewModels"
+    xmlns:controls="using:Xoard.App.Controls"
+    FontFamily="{StaticResource XFontText}"
+    Foreground="{StaticResource XInk}">
+
+    <Grid>
+        <Grid MaxWidth="800" HorizontalAlignment="Stretch" Padding="24,16,24,0" RowDefinitions="Auto,Auto,Auto,*" RowSpacing="14">
+
+            <!-- ═══ Шапка ═══ -->
+            <Grid ColumnDefinitions="*,Auto">
+                <StackPanel Spacing="4">
+                    <Button Style="{StaticResource XButton}" Padding="0" MinHeight="0" HorizontalAlignment="Left" Foreground="{StaticResource XMuted}"
+                            AutomationProperties.Name="Состояние звука" ToolTipService.ToolTip="Состояние звука, VB-CABLE и Discord">
+                        <StackPanel Orientation="Horizontal" Spacing="8">
+                            <Ellipse Width="8" Height="8" Fill="{x:Bind Vm.StatusDot, Mode=OneWay}" VerticalAlignment="Center" />
+                            <TextBlock Text="{x:Bind Vm.StatusText, Mode=OneWay}" FontSize="12" />
+                        </StackPanel>
+                        <Button.Flyout>
+                            <Flyout Placement="BottomEdgeAlignedLeft">
+                                <StackPanel Width="380" Spacing="8">
+                                    <TextBlock Text="{x:Bind Vm.VbCableText, Mode=OneWay}" TextWrapping="Wrap" />
+                                    <HyperlinkButton Content="Скачать VB-CABLE" Command="{x:Bind Vm.OpenVbCableSiteCommand}" Visibility="{x:Bind Vm.VbCableMissing, Mode=OneWay}" Padding="0" />
+                                    <HyperlinkButton Content="Как настроить Discord" Command="{x:Bind Vm.ShowSetupGuideCommand}" Padding="0" />
+                                    <ItemsControl ItemsSource="{x:Bind Vm.Issues}">
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate x:DataType="vm:IssueView">
+                                                <InfoBar IsOpen="True" IsClosable="False" Margin="0,4,0,0" Title="{x:Bind Title}" Message="{x:Bind Message}" Severity="{x:Bind Severity}" />
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
+                                </StackPanel>
+                            </Flyout>
+                        </Button.Flyout>
+                    </Button>
+                    <TextBlock Text="Xoard" FontFamily="{StaticResource XFontDisplay}" FontSize="32" FontWeight="ExtraBold" />
+                    <TextBlock Text="{x:Bind Vm.HumorLine, Mode=OneWay}" Style="{StaticResource XSub}" TextWrapping="NoWrap" TextTrimming="CharacterEllipsis" />
+                </StackPanel>
+                <Button Grid.Column="1" Style="{StaticResource XIconButton}" Command="{x:Bind Vm.OpenSettingsCommand}" Width="44" Height="44" VerticalAlignment="Top"
+                        Background="{StaticResource XSurface}" BorderBrush="{StaticResource XLine}" BorderThickness="1"
+                        CornerRadius="{Binding Control, Source={StaticResource Shape}}" AutomationProperties.Name="Настройки" ToolTipService.ToolTip="Настройки">
+                    <FontIcon Glyph="&#xE713;" FontSize="18" />
+                </Button>
+            </Grid>
+
+            <!-- ═══ Повтор: большая живая волна ═══ -->
+            <Border Grid.Row="1" Padding="18,14" Background="{StaticResource XSurface}" BorderBrush="{StaticResource XLine}"
+                    BorderThickness="{Binding CardBorder, Source={StaticResource Shape}}" CornerRadius="{Binding Card, Source={StaticResource Shape}}">
+                <StackPanel Spacing="12">
+                    <StackPanel Orientation="Horizontal" Spacing="10">
+                        <Ellipse Width="8" Height="8" Fill="{StaticResource XRecording}" VerticalAlignment="Center" Visibility="{x:Bind Vm.ReplayEnabled, Mode=OneWay}" />
+                        <TextBlock Text="{x:Bind Vm.ReplayTitle, Mode=OneWay}" Style="{StaticResource XHead}" />
+                        <TextBlock Text="звук компьютера, без звуков Xoard" Style="{StaticResource XSub}" VerticalAlignment="Center" />
+                    </StackPanel>
+                    <Grid RowDefinitions="64,Auto" RowSpacing="4" AutomationProperties.Name="Волна последних секунд звука компьютера">
+                        <controls:WaveView x:Name="LiveWave" WaveBrush="{StaticResource XPrimary}" LineBrush="{StaticResource XWave}" />
+                        <Rectangle Width="2" HorizontalAlignment="Right" Fill="{StaticResource XAccent}" Margin="0,-2,0,-2" />
+                        <Grid Grid.Row="1" ColumnDefinitions="*,*,*,Auto">
+                            <TextBlock Text="{x:Bind Vm.ReplayTickFar, Mode=OneWay}" Style="{StaticResource XCap}" FontWeight="Normal" />
+                            <TextBlock Grid.Column="1" Text="{x:Bind Vm.ReplayTickMid, Mode=OneWay}" Style="{StaticResource XCap}" FontWeight="Normal" />
+                            <TextBlock Grid.Column="2" Text="{x:Bind Vm.ReplayTickNear, Mode=OneWay}" Style="{StaticResource XCap}" FontWeight="Normal" />
+                            <TextBlock Grid.Column="3" Text="сейчас" Style="{StaticResource XCap}" Foreground="{StaticResource XInk}" />
+                        </Grid>
+                    </Grid>
+                    <Grid ColumnDefinitions="Auto,Auto,*,Auto" ColumnSpacing="10">
+                        <Button Style="{StaticResource XPrimaryButton}" Command="{x:Bind Vm.SaveReplayAsIsCommand}" Height="42"
+                                CornerRadius="{Binding Control, Source={StaticResource Shape}}" ToolTipService.ToolTip="Сразу сохранить новым звуком">
+                            <StackPanel Orientation="Horizontal" Spacing="8">
+                                <FontIcon Glyph="&#xE81C;" FontSize="16" />
+                                <TextBlock Text="Сохранить как звук" />
+                            </StackPanel>
+                        </Button>
+                        <Button Grid.Column="1" Style="{StaticResource XTonalButton}" Command="{x:Bind Vm.SaveReplayCommand}" Height="42"
+                                CornerRadius="{Binding Control, Source={StaticResource Shape}}" ToolTipService.ToolTip="Сохранить и сразу выделить нужный кусок">
+                            <StackPanel Orientation="Horizontal" Spacing="8">
+                                <FontIcon Glyph="&#xE7A8;" FontSize="14" />
+                                <TextBlock Text="Обрезать и сохранить" />
+                            </StackPanel>
+                        </Button>
+                        <TextBlock Grid.Column="3" Text="{x:Bind Vm.ReplaySaveHint, Mode=OneWay}" Style="{StaticResource XSub}" VerticalAlignment="Center" />
+                    </Grid>
+                </StackPanel>
+            </Border>
+
+            <!-- ═══ Звуки: заголовок, поиск ═══ -->
+            <Grid Grid.Row="2" ColumnDefinitions="Auto,Auto,*,Auto,Auto" ColumnSpacing="10">
+                <TextBlock Text="Звуки" FontSize="19" FontWeight="SemiBold" VerticalAlignment="Center" />
+                <TextBlock Grid.Column="1" Text="{x:Bind Vm.SoundsCountText, Mode=OneWay}" Style="{StaticResource XSub}" VerticalAlignment="Center" />
+                <Grid Grid.Column="3" Width="220">
+                    <TextBox PlaceholderText="Поиск" AutomationProperties.Name="Поиск звуков" Height="36" Padding="32,7,10,0"
+                             CornerRadius="{Binding Control, Source={StaticResource Shape}}" FontSize="14"
+                             Text="{x:Bind Vm.SearchText, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                    <FontIcon Glyph="&#xE721;" FontSize="14" Foreground="{StaticResource XMuted}" HorizontalAlignment="Left" Margin="11,0,0,0" IsHitTestVisible="False" />
+                </Grid>
+                <Button Grid.Column="4" Style="{StaticResource XTonalButton}" Command="{x:Bind Vm.AddSoundsCommand}" Height="36"
+                        CornerRadius="{Binding Control, Source={StaticResource Shape}}" ToolTipService.ToolTip="Добавить звуки (или перетащите файлы в окно)">
+                    <StackPanel Orientation="Horizontal" Spacing="6">
+                        <FontIcon Glyph="&#xE710;" FontSize="13" />
+                        <TextBlock Text="Добавить" />
+                    </StackPanel>
+                </Button>
+            </Grid>
+
+            <!-- ═══ Список звуков ═══ -->
+            <Border Grid.Row="3" Margin="0,0,0,96" Background="{StaticResource XSurface}" BorderBrush="{StaticResource XLine}"
+                    BorderThickness="{Binding CardBorder, Source={StaticResource Shape}}" CornerRadius="{Binding Card, Source={StaticResource Shape}}">
+                <Grid>
+                    <ListView x:Name="SoundsList" ItemsSource="{x:Bind Vm.VisibleSounds}" SelectionMode="None" IsItemClickEnabled="True" ItemClick="OnSoundClick"
+                              CanDragItems="{x:Bind Vm.IsSearchEmpty, Mode=OneWay}" CanReorderItems="{x:Bind Vm.IsSearchEmpty, Mode=OneWay}"
+                              AllowDrop="True" DragItemsCompleted="OnDragItemsCompleted" Padding="0,4">
+                        <ListView.Resources>
+                            <StaticResource x:Key="ListViewItemBackgroundPointerOver" ResourceKey="XSunken" />
+                            <StaticResource x:Key="ListViewItemBackgroundPressed" ResourceKey="XSunken" />
+                        </ListView.Resources>
+                        <ListView.ItemContainerStyle>
+                            <Style TargetType="ListViewItem">
+                                <Setter Property="Padding" Value="0" />
+                                <Setter Property="Margin" Value="0" />
+                                <Setter Property="MinHeight" Value="0" />
+                                <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+                            </Style>
+                        </ListView.ItemContainerStyle>
+                        <ListView.ItemTemplate>
+                            <DataTemplate x:DataType="vm:SoundItem">
+                                <Grid Height="52" ColumnDefinitions="Auto,*,140,44,96,Auto" ColumnSpacing="12" Padding="14,0,8,0" Background="Transparent"
+                                      ToolTipService.ToolTip="{x:Bind Tooltip, Mode=OneWay}">
+                                    <Grid.ContextFlyout>
+                                        <MenuFlyout>
+                                            <MenuFlyoutItem Text="Играть" Command="{x:Bind PlayCommand}">
+                                                <MenuFlyoutItem.Icon><FontIcon Glyph="&#xE768;" /></MenuFlyoutItem.Icon>
+                                            </MenuFlyoutItem>
+                                            <MenuFlyoutItem Text="Только мне (предпрослушать)" Command="{x:Bind PreviewCommand}">
+                                                <MenuFlyoutItem.Icon><FontIcon Glyph="&#xE7F6;" /></MenuFlyoutItem.Icon>
+                                            </MenuFlyoutItem>
+                                            <MenuFlyoutSeparator />
+                                            <MenuFlyoutItem Text="Назначить клавишу…" Command="{x:Bind AssignHotkeyCommand}">
+                                                <MenuFlyoutItem.Icon><FontIcon Glyph="&#xE765;" /></MenuFlyoutItem.Icon>
+                                            </MenuFlyoutItem>
+                                            <MenuFlyoutItem Text="Обрезать…" Command="{x:Bind TrimCommand}">
+                                                <MenuFlyoutItem.Icon><FontIcon Glyph="&#xE7A8;" /></MenuFlyoutItem.Icon>
+                                            </MenuFlyoutItem>
+                                            <MenuFlyoutItem Text="Переименовать…" Command="{x:Bind RenameCommand}">
+                                                <MenuFlyoutItem.Icon><FontIcon Glyph="&#xE8AC;" /></MenuFlyoutItem.Icon>
+                                            </MenuFlyoutItem>
+                                            <MenuFlyoutItem Text="Показать в папке" Command="{x:Bind ShowInFolderCommand}">
+                                                <MenuFlyoutItem.Icon><FontIcon Glyph="&#xE838;" /></MenuFlyoutItem.Icon>
+                                            </MenuFlyoutItem>
+                                            <MenuFlyoutSeparator />
+                                            <MenuFlyoutItem Text="Удалить в корзину" Command="{x:Bind DeleteCommand}">
+                                                <MenuFlyoutItem.Icon><FontIcon Glyph="&#xE74D;" /></MenuFlyoutItem.Icon>
+                                            </MenuFlyoutItem>
+                                        </MenuFlyout>
+                                    </Grid.ContextFlyout>
+
+                                    <Border Grid.ColumnSpan="6" Margin="-14,0,-8,0" Background="{StaticResource XPrimarySoft}" Visibility="{x:Bind IsPlaying, Mode=OneWay}" />
+                                    <Border Width="34" Height="34" Background="{StaticResource XPrimarySoft}" CornerRadius="{Binding Control, Source={StaticResource Shape}}">
+                                        <Grid>
+                                            <FontIcon Glyph="&#xE768;" FontSize="13" Foreground="{StaticResource XPrimary}" Visibility="{x:Bind IsNotPlaying, Mode=OneWay}" />
+                                            <FontIcon Glyph="&#xE71A;" FontSize="13" Foreground="{StaticResource XPrimary}" Visibility="{x:Bind IsPlaying, Mode=OneWay}" />
+                                        </Grid>
+                                    </Border>
+                                    <TextBlock Grid.Column="1" Text="{x:Bind Name, Mode=OneWay}" FontSize="16" FontWeight="SemiBold" VerticalAlignment="Center"
+                                               TextWrapping="NoWrap" TextTrimming="CharacterEllipsis" />
+                                    <controls:WaveView Grid.Column="2" Height="24" VerticalAlignment="Center" Peaks="{x:Bind Wave, Mode=OneWay}" Progress="{x:Bind Progress, Mode=OneWay}"
+                                                       WaveBrush="{StaticResource XWave}" PlayedBrush="{StaticResource XPrimary}" />
+                                    <TextBlock Grid.Column="3" Text="{x:Bind DurationText, Mode=OneWay}" Style="{StaticResource XSub}" TextWrapping="NoWrap"
+                                               HorizontalAlignment="Right" VerticalAlignment="Center" />
+                                    <Border Grid.Column="4" HorizontalAlignment="Right" VerticalAlignment="Center" Padding="6,1" BorderBrush="{StaticResource XLine}" BorderThickness="1"
+                                            CornerRadius="{Binding Chip, Source={StaticResource Shape}}" Visibility="{x:Bind HasHotkey, Mode=OneWay}">
+                                        <TextBlock Text="{x:Bind HotkeyText, Mode=OneWay}" Style="{StaticResource XCap}" TextTrimming="CharacterEllipsis" />
+                                    </Border>
+                                    <Grid Grid.Column="4" HorizontalAlignment="Right">
+                                        <ProgressRing Width="14" Height="14" IsActive="{x:Bind IsLoading, Mode=OneWay}" />
+                                        <FontIcon Glyph="&#xE7BA;" FontSize="14" Foreground="{StaticResource XAccent}" Visibility="{x:Bind HasError, Mode=OneWay}" />
+                                    </Grid>
+                                    <Button Grid.Column="5" Style="{StaticResource XIconButton}" Width="32" Height="32" Click="OnMoreClick"
+                                            CornerRadius="{Binding Control, Source={StaticResource Shape}}" AutomationProperties.Name="Действия со звуком" ToolTipService.ToolTip="Действия">
+                                        <FontIcon Glyph="&#xE712;" FontSize="14" />
+                                    </Button>
+                                    <Rectangle Grid.ColumnSpan="6" Height="1" Margin="-14,0,-8,0" VerticalAlignment="Bottom" Fill="{StaticResource XLine}" />
+                                </Grid>
+                            </DataTemplate>
+                        </ListView.ItemTemplate>
+                    </ListView>
+
+                    <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center" Spacing="10" Padding="0,24" Visibility="{x:Bind Vm.HasNoSounds, Mode=OneWay}">
+                        <TextBlock Text="Добавьте первые звуки" Style="{StaticResource XTitle}" HorizontalAlignment="Center" />
+                        <TextBlock Text="Перетащите mp3 или wav в окно — или нажмите «Добавить». Можно и сохранить повтор сверху." Style="{StaticResource XSub}" HorizontalAlignment="Center" TextAlignment="Center" MaxWidth="360" />
+                    </StackPanel>
+                    <TextBlock Text="Ничего не найдено" Style="{StaticResource XSub}" HorizontalAlignment="Center" VerticalAlignment="Center" Visibility="{x:Bind Vm.HasNoMatches, Mode=OneWay}" />
+                </Grid>
+            </Border>
+        </Grid>
+
+        <!-- ═══ Капсула снизу: стоп, громкости (по нажатию — ползунок), источник записи; кнопка записи ═══ -->
+        <StackPanel Orientation="Horizontal" Spacing="12" HorizontalAlignment="Center" VerticalAlignment="Bottom" Margin="0,0,0,18">
+            <Border Height="58" Padding="8,0" Background="{StaticResource XSurface}" BorderBrush="{StaticResource XLine}" BorderThickness="1"
+                    CornerRadius="{Binding Pill, Source={StaticResource Shape}}">
+                <StackPanel Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
+                    <Button Style="{StaticResource XTonalButton}" Command="{x:Bind Vm.StopAllCommand}" Height="42" CornerRadius="{Binding Control, Source={StaticResource Shape}}"
+                            ToolTipService.ToolTip="Остановить все звуки">
+                        <StackPanel Orientation="Horizontal" Spacing="8">
+                            <FontIcon Glyph="&#xE71A;" FontSize="13" />
+                            <TextBlock Text="Стоп всё" />
+                        </StackPanel>
+                    </Button>
+                    <Button Style="{StaticResource XButton}" Height="42" CornerRadius="{Binding Control, Source={StaticResource Shape}}" ToolTipService.ToolTip="Мне в наушники"
+                            AutomationProperties.Name="Громкость в наушниках">
+                        <StackPanel Orientation="Horizontal" Spacing="8">
+                            <FontIcon Glyph="&#xE7F6;" FontSize="16" />
+                            <TextBlock Text="{x:Bind Vm.HeadphonesText, Mode=OneWay}" />
+                        </StackPanel>
+                        <Button.Flyout>
+                            <Flyout Placement="Top">
+                                <Slider Width="220" Header="Мне в наушники" Minimum="0" Maximum="100" StepFrequency="1" Value="{x:Bind Vm.HeadphonesLevel, Mode=TwoWay}" />
+                            </Flyout>
+                        </Button.Flyout>
+                    </Button>
+                    <Button Style="{StaticResource XButton}" Height="42" CornerRadius="{Binding Control, Source={StaticResource Shape}}" ToolTipService.ToolTip="Звуки друзьям"
+                            AutomationProperties.Name="Громкость звуков для друзей">
+                        <StackPanel Orientation="Horizontal" Spacing="8">
+                            <FontIcon Glyph="&#xE716;" FontSize="16" />
+                            <TextBlock Text="{x:Bind Vm.CableText, Mode=OneWay}" />
+                        </StackPanel>
+                        <Button.Flyout>
+                            <Flyout Placement="Top">
+                                <Slider Width="220" Header="Звуки друзьям" Minimum="0" Maximum="100" StepFrequency="1" Value="{x:Bind Vm.CableLevel, Mode=TwoWay}" />
+                            </Flyout>
+                        </Button.Flyout>
+                    </Button>
+                    <Button Style="{StaticResource XButton}" Height="42" CornerRadius="{Binding Control, Source={StaticResource Shape}}" ToolTipService.ToolTip="Мой голос"
+                            AutomationProperties.Name="Мой голос">
+                        <StackPanel Orientation="Horizontal" Spacing="8">
+                            <FontIcon Glyph="&#xE720;" FontSize="16" />
+                            <TextBlock Text="{x:Bind Vm.MicText, Mode=OneWay}" />
+                        </StackPanel>
+                        <Button.Flyout>
+                            <Flyout Placement="Top">
+                                <StackPanel Spacing="8">
+                                    <Slider Width="220" Header="Мой голос" Minimum="0" Maximum="100" StepFrequency="1" Value="{x:Bind Vm.MicLevel, Mode=TwoWay}" />
+                                    <ToggleSwitch Header="Выключить голос" IsOn="{x:Bind Vm.MicMuted, Mode=TwoWay}" OnContent="Друзья слышат только звуки" OffContent="Голос идёт" />
+                                </StackPanel>
+                            </Flyout>
+                        </Button.Flyout>
+                    </Button>
+                    <Rectangle Width="1" Height="26" Fill="{StaticResource XLine}" Margin="2,0" />
+                    <Button Style="{StaticResource XQuietButton}" Command="{x:Bind Vm.ToggleRecordSourceCommand}" Height="42" Foreground="{StaticResource XMuted}"
+                            CornerRadius="{Binding Control, Source={StaticResource Shape}}" ToolTipService.ToolTip="Что записывать: звук компьютера или микрофон">
+                        <StackPanel Orientation="Horizontal" Spacing="6">
+                            <FontIcon Glyph="{x:Bind Vm.RecordSourceGlyph, Mode=OneWay}" FontSize="13" />
+                            <TextBlock Text="{x:Bind Vm.RecordSourceShort, Mode=OneWay}" />
+                        </StackPanel>
+                    </Button>
+                </StackPanel>
+            </Border>
+
+            <StackPanel Spacing="6" VerticalAlignment="Bottom">
+                <Border HorizontalAlignment="Center" Padding="10,4" Background="{StaticResource XInk}" CornerRadius="{Binding Control, Source={StaticResource Shape}}"
+                        Visibility="{x:Bind Vm.IsRecording, Mode=OneWay}">
+                    <StackPanel Orientation="Horizontal" Spacing="6">
+                        <Ellipse Width="8" Height="8" Fill="{StaticResource XRecording}" VerticalAlignment="Center" />
+                        <TextBlock Text="{x:Bind Vm.RecordingTimeText, Mode=OneWay}" Foreground="{StaticResource XBg}" FontSize="14" FontWeight="SemiBold" />
+                    </StackPanel>
+                </Border>
+                <Button Style="{StaticResource XButton}" Command="{x:Bind Vm.ToggleRecordingCommand}" Width="58" Height="58" Padding="0" CornerRadius="29"
+                        Background="{StaticResource XAccent}" Foreground="{StaticResource XOnAccent}"
+                        AutomationProperties.Name="Начать или остановить запись" ToolTipService.ToolTip="{x:Bind Vm.RecordButtonText, Mode=OneWay}">
+                    <Grid>
+                        <Ellipse Width="18" Height="18" Fill="{StaticResource XOnAccent}" Visibility="{x:Bind Vm.IsNotRecording, Mode=OneWay}" />
+                        <Rectangle Width="18" Height="18" RadiusX="3" RadiusY="3" Fill="{StaticResource XOnAccent}" Visibility="{x:Bind Vm.IsRecording, Mode=OneWay}" />
+                    </Grid>
+                </Button>
+            </StackPanel>
+        </StackPanel>
+    </Grid>
+</UserControl>
