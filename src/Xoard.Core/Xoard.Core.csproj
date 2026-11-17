@@ -1,0 +1,26 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Ядро: звуковой движок, библиотека звуков, конфиг, горячие клавиши, сервер управления -->
+  <PropertyGroup>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <RootNamespace>Xoard.Core</RootNamespace>
+    <AssemblyName>Xoard.Core</AssemblyName>
+    <!-- LibraryImport (P/Invoke через генератор) -->
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="NAudio" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Xoard.Protocol\Xoard.Protocol.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="Xoard.Core.Tests" />
+    <!-- Консольный стенд проверки движка -->
+    <InternalsVisibleTo Include="Xoard.Poc" />
+  </ItemGroup>
+
+</Project>

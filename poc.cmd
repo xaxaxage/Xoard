@@ -1,5 +1,5 @@
 @echo off
-rem Runs Soundboard.Poc (stage 0). Works without .NET in PATH:
+rem Runs Xoard.Poc (stage 0). Works without .NET in PATH:
 rem the SDK may live in %USERPROFILE%\.dotnet (user-local install).
 setlocal
 if exist "%USERPROFILE%\.dotnet\dotnet.exe" (
@@ -8,4 +8,4 @@ if exist "%USERPROFILE%\.dotnet\dotnet.exe" (
 )
 set DOTNET_CLI_TELEMETRY_OPTOUT=1
 set DOTNET_NOLOGO=1
-dotnet run --project "%~dp0src\Soundboard.Poc" -v q -- %*
+dotnet run --project "%~dp0src\Xoard.Poc" -v q -- %*

@@ -1,0 +1,14 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/Xoard.App/Xoard.App.csproj">
+      <Platform Project="x64" />
+    </Project>
+    <Project Path="src/Xoard.Core/Xoard.Core.csproj" />
+    <Project Path="src/Xoard.Mcp/Xoard.Mcp.csproj" />
+    <Project Path="src/Xoard.Poc/Xoard.Poc.csproj" />
+    <Project Path="src/Xoard.Protocol/Xoard.Protocol.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/Xoard.Core.Tests/Xoard.Core.Tests.csproj" />
+  </Folder>
+</Solution>

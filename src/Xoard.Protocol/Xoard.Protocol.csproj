@@ -1,0 +1,14 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Протокол управления: типы запросов/ответов и клиент named pipe. Без зависимостей. -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <RootNamespace>Xoard.Protocol</RootNamespace>
+    <AssemblyName>Xoard.Protocol</AssemblyName>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="Xoard.Core.Tests" />
+  </ItemGroup>
+
+</Project>

@@ -6,8 +6,8 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <AnalysisLevel>latest-recommended</AnalysisLevel>
     <Deterministic>true</Deterministic>
-    <Company>Soundboard</Company>
-    <Product>Soundboard</Product>
+    <Company>Xoard</Company>
+    <Product>Xoard</Product>
     <Version>0.0.1</Version>
     <!-- Все bin/obj в artifacts/ в корне: короче пути (лимит Windows 260 символов) и чище дерево -->
     <UseArtifactsOutput>true</UseArtifactsOutput>
