@@ -41,6 +41,8 @@ public sealed partial class MainViewModel : ObservableObject, IAsyncDisposable
     private readonly Dictionary<string, SoundItem> byKey = new(StringComparer.Ordinal);
     private readonly ConcurrentDictionary<string, SoundItem> byFile = new(StringComparer.OrdinalIgnoreCase);
     private const string StopHotkeyName = "stop";
+    private const string RecordHotkeyName = "record";
+    private const string ReplayHotkeyName = "replay";
     private const string SoundHotkeyPrefix = "sound:";
     private HotkeyManager? hotkeys;
     private Soundboard.Core.Control.ControlServer? controlServer;
@@ -101,10 +103,14 @@ public sealed partial class MainViewModel : ObservableObject, IAsyncDisposable
     public event Action<SoundItem>? RenameRequested;
 
     /// <summary>Попросить окно показать диалог назначения клавиши (null — клавиша «Стоп всё»).</summary>
-    public event Action<SoundItem?>? HotkeyRequested;
+    public event Action<HotkeyTarget>? HotkeyRequested;
 
     /// <summary>Клавиша «Стоп всё» для настроек.</summary>
     public string StopAllHotkeyText => config.StopAllHotkey ?? "не назначена";
+
+    public string RecordHotkeyText => config.RecordHotkey ?? "не назначена";
+
+    public string ReplayHotkeyText => config.ReplayHotkey ?? "не назначена";
 
     /// <summary>Все звуки в сохранённом порядке.</summary>
     public ObservableCollection<SoundItem> Sounds { get; } = [];
@@ -226,6 +232,7 @@ public sealed partial class MainViewModel : ObservableObject, IAsyncDisposable
 
         RefreshVisible();
         StartHotkeys();
+        _ = InitRecordingAsync();
 
         try
         {
@@ -303,10 +310,18 @@ public sealed partial class MainViewModel : ObservableObject, IAsyncDisposable
 
     public void RequestRename(SoundItem item) => RenameRequested?.Invoke(item);
 
-    public void RequestHotkey(SoundItem? item) => HotkeyRequested?.Invoke(item);
+    public void RequestHotkey(SoundItem? item) => RequestHotkey(item is null ? HotkeyTarget.StopAll : HotkeyTarget.ForSound(item));
+
+    public void RequestHotkey(HotkeyTarget target) => HotkeyRequested?.Invoke(target);
 
     [RelayCommand]
-    private void AssignStopHotkey() => RequestHotkey(null);
+    private void AssignStopHotkey() => RequestHotkey(HotkeyTarget.StopAll);
+
+    [RelayCommand]
+    private void AssignRecordHotkey() => RequestHotkey(HotkeyTarget.Record);
+
+    [RelayCommand]
+    private void AssignReplayHotkey() => RequestHotkey(HotkeyTarget.Replay);
 
     // ───────── горячие клавиши ─────────
 
@@ -335,8 +350,16 @@ public sealed partial class MainViewModel : ObservableObject, IAsyncDisposable
         if (hotkeys is null)
             return failed;
 
-        if (HotkeyGesture.TryParse(config.StopAllHotkey, out var stop) && hotkeys.Register(StopHotkeyName, stop) != HotkeyResult.Registered)
-            failed.Add($"«Стоп всё» ({stop})");
+        foreach (var (name, text, label) in new[]
+                 {
+                     (StopHotkeyName, config.StopAllHotkey, "«Стоп всё»"),
+                     (RecordHotkeyName, config.RecordHotkey, "«Запись»"),
+                     (ReplayHotkeyName, config.ReplayHotkey, "«Повтор»"),
+                 })
+        {
+            if (HotkeyGesture.TryParse(text, out var g) && hotkeys.Register(name, g) != HotkeyResult.Registered)
+                failed.Add($"{label} ({g})");
+        }
 
         foreach (var (file, text) in config.SoundHotkeys)
         {
@@ -353,10 +376,17 @@ public sealed partial class MainViewModel : ObservableObject, IAsyncDisposable
     /// <summary>Поток клавиш: звук запускается сразу, без ожидания потока интерфейса.</summary>
     private void OnHotkeyPressed(object? sender, HotkeyPressedEventArgs e)
     {
-        if (e.Name == StopHotkeyName)
+        switch (e.Name)
         {
-            engine.StopAll();
-            return;
+            case StopHotkeyName:
+                engine.StopAll();
+                return;
+            case RecordHotkeyName:
+                dispatcher.TryEnqueue(() => _ = ToggleRecordingAsync(fromHotkey: true));
+                return;
+            case ReplayHotkeyName:
+                dispatcher.TryEnqueue(() => _ = SaveReplayAsync(fromHotkey: true));
+                return;
         }
 
         if (!e.Name.StartsWith(SoundHotkeyPrefix, StringComparison.Ordinal)
@@ -376,15 +406,20 @@ public sealed partial class MainViewModel : ObservableObject, IAsyncDisposable
 
     public void ResumeHotkeys() => RegisterAllHotkeys();
 
-    /// <summary>Текущая клавиша звука (или «Стоп всё», если item = null).</summary>
-    public string? CurrentHotkey(SoundItem? item) =>
-        item is null ? config.StopAllHotkey : config.SoundHotkeys.GetValueOrDefault(item.File.FileName);
+    /// <summary>Текущее сочетание цели.</summary>
+    public string? CurrentHotkey(HotkeyTarget target) => target.Kind switch
+    {
+        HotkeyKind.StopAll => config.StopAllHotkey,
+        HotkeyKind.Record => config.RecordHotkey,
+        HotkeyKind.Replay => config.ReplayHotkey,
+        _ => config.SoundHotkeys.GetValueOrDefault(target.Sound!.File.FileName),
+    };
 
     /// <summary>
     /// Назначить (gesture ≠ null) или убрать клавишу. Возвращает текст ошибки или null.
     /// Вызывается при снятых клавишах (<see cref="SuspendHotkeys"/>), проверка занятости — пробной регистрацией.
     /// </summary>
-    public string? SetHotkey(SoundItem? item, HotkeyGesture? gesture)
+    public string? SetHotkey(HotkeyTarget target, HotkeyGesture? gesture)
     {
         if (gesture is { } g)
         {
@@ -392,12 +427,20 @@ public sealed partial class MainViewModel : ObservableObject, IAsyncDisposable
                 return "Нужна обычная клавиша вместе с Ctrl/Alt/Shift или без них — одних модификаторов мало.";
 
             var text = g.ToString();
-            if (item is not null && string.Equals(config.StopAllHotkey, text, StringComparison.OrdinalIgnoreCase))
-                return $"{text} уже назначено на «Стоп всё».";
-            var owner = config.SoundHotkeys.FirstOrDefault(kv =>
-                string.Equals(kv.Value, text, StringComparison.OrdinalIgnoreCase) && (item is null || !string.Equals(kv.Key, item.File.FileName, StringComparison.OrdinalIgnoreCase)));
-            if (owner.Key is not null)
-                return $"{text} уже назначено звуку «{byFile.GetValueOrDefault(owner.Key)?.Name ?? owner.Key}».";
+            var others = new List<(HotkeyTarget Target, string? Text, string Label)>
+            {
+                (HotkeyTarget.StopAll, config.StopAllHotkey, "«Стоп всё»"),
+                (HotkeyTarget.Record, config.RecordHotkey, "«Запись»"),
+                (HotkeyTarget.Replay, config.ReplayHotkey, "«Повтор»"),
+            };
+            others.AddRange(config.SoundHotkeys.Select(kv =>
+                (byFile.TryGetValue(kv.Key, out var s) ? HotkeyTarget.ForSound(s) : new HotkeyTarget(HotkeyKind.Sound),
+                 (string?)kv.Value,
+                 $"звуку «{byFile.GetValueOrDefault(kv.Key)?.Name ?? kv.Key}»")));
+
+            var clash = others.FirstOrDefault(o => string.Equals(o.Text, text, StringComparison.OrdinalIgnoreCase) && !SameTarget(o.Target, target));
+            if (clash.Label is not null)
+                return $"{text} уже назначено {clash.Label}.";
 
             // Пробная регистрация: сочетание может быть занято другой программой или Windows
             if (hotkeys is not null)
@@ -412,25 +455,38 @@ public sealed partial class MainViewModel : ObservableObject, IAsyncDisposable
         }
 
         var gestureText = gesture?.ToString();
-        if (item is null)
+        switch (target.Kind)
         {
-            config = config with { StopAllHotkey = gestureText };
-            OnPropertyChanged(nameof(StopAllHotkeyText));
-        }
-        else
-        {
-            var map = new Dictionary<string, string>(config.SoundHotkeys, StringComparer.OrdinalIgnoreCase);
-            if (gestureText is null)
-                map.Remove(item.File.FileName);
-            else
-                map[item.File.FileName] = gestureText;
-            config = config with { SoundHotkeys = map };
-            item.HotkeyText = gestureText ?? "";
+            case HotkeyKind.StopAll:
+                config = config with { StopAllHotkey = gestureText };
+                break;
+            case HotkeyKind.Record:
+                config = config with { RecordHotkey = gestureText };
+                break;
+            case HotkeyKind.Replay:
+                config = config with { ReplayHotkey = gestureText };
+                break;
+            default:
+                var item = target.Sound!;
+                var map = new Dictionary<string, string>(config.SoundHotkeys, StringComparer.OrdinalIgnoreCase);
+                if (gestureText is null)
+                    map.Remove(item.File.FileName);
+                else
+                    map[item.File.FileName] = gestureText;
+                config = config with { SoundHotkeys = map };
+                item.HotkeyText = gestureText ?? "";
+                break;
         }
 
+        OnPropertyChanged(nameof(StopAllHotkeyText));
+        OnPropertyChanged(nameof(RecordHotkeyText));
+        OnPropertyChanged(nameof(ReplayHotkeyText));
         ScheduleSave();
         return null;
     }
+
+    private static bool SameTarget(HotkeyTarget a, HotkeyTarget b) =>
+        a.Kind == b.Kind && (a.Kind != HotkeyKind.Sound || ReferenceEquals(a.Sound, b.Sound));
 
     private void MoveHotkey(string oldFile, string? newFile)
     {
@@ -814,6 +870,7 @@ public sealed partial class MainViewModel : ObservableObject, IAsyncDisposable
 
     private void UpdateMeters()
     {
+        UpdateRecordingUi();
         if (!engineRunning)
             return;
         var m = engine.ReadMeters();
@@ -882,6 +939,7 @@ public sealed partial class MainViewModel : ObservableObject, IAsyncDisposable
         saveTimer.Stop();
         SaveNow();
         hotkeys?.Dispose();
+        await recorder.DisposeAsync().ConfigureAwait(false);
         if (controlServer is not null)
             await controlServer.DisposeAsync().ConfigureAwait(false);
         await engine.DisposeAsync().ConfigureAwait(false);

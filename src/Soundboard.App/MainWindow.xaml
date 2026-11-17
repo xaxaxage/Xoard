@@ -69,7 +69,7 @@
                         <FontIcon Glyph="&#xF0E2;" />
                     </NavigationViewItem.Icon>
                 </NavigationViewItem>
-                <NavigationViewItem Content="Запись — появится на этапе 5" IsEnabled="False">
+                <NavigationViewItem x:Name="RecordNavItem" Content="Запись">
                     <NavigationViewItem.Icon>
                         <FontIcon Glyph="&#xE720;" />
                     </NavigationViewItem.Icon>
@@ -112,6 +112,9 @@
                                             <MenuFlyoutSeparator />
                                             <MenuFlyoutItem Text="Назначить клавишу…" Command="{x:Bind AssignHotkeyCommand}">
                                                 <MenuFlyoutItem.Icon><FontIcon Glyph="&#xE765;" /></MenuFlyoutItem.Icon>
+                                            </MenuFlyoutItem>
+                                            <MenuFlyoutItem Text="Обрезать…" Command="{x:Bind TrimCommand}">
+                                                <MenuFlyoutItem.Icon><FontIcon Glyph="&#xE7A8;" /></MenuFlyoutItem.Icon>
                                             </MenuFlyoutItem>
                                             <MenuFlyoutItem Text="Переименовать…" Command="{x:Bind RenameCommand}">
                                                 <MenuFlyoutItem.Icon><FontIcon Glyph="&#xE8AC;" /></MenuFlyoutItem.Icon>
@@ -168,6 +171,59 @@
                     <TextBlock Grid.Row="2" Text="Ничего не найдено" HorizontalAlignment="Center" VerticalAlignment="Center"
                                Foreground="{ThemeResource TextFillColorSecondaryBrush}" Visibility="{x:Bind Vm.HasNoMatches, Mode=OneWay}" />
                 </Grid>
+
+                <!-- Запись -->
+                <ScrollViewer x:Name="RecordingPanel" Visibility="Collapsed" Padding="24,12,24,24">
+                    <StackPanel MaxWidth="720" HorizontalAlignment="Left" Spacing="12">
+                        <TextBlock Text="Запись" Style="{StaticResource TitleTextBlockStyle}" Margin="0,0,0,4" />
+                        <Border Padding="16" CornerRadius="8" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}">
+                            <StackPanel Spacing="12">
+                                <RadioButtons Header="Что записывать" SelectedIndex="{x:Bind Vm.RecordSourceIndex, Mode=TwoWay}" MaxColumns="2">
+                                    <x:String>Звук компьютера</x:String>
+                                    <x:String>Микрофон</x:String>
+                                </RadioButtons>
+                                <TextBlock Text="{x:Bind Vm.RecordSourceHint, Mode=OneWay}" TextWrapping="Wrap"
+                                           Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                                <StackPanel Orientation="Horizontal" Spacing="16">
+                                    <Button Command="{x:Bind Vm.ToggleRecordingCommand}" Style="{StaticResource AccentButtonStyle}" Padding="16,8"
+                                            AutomationProperties.Name="Начать или остановить запись">
+                                        <StackPanel Orientation="Horizontal" Spacing="8">
+                                            <FontIcon Glyph="{x:Bind Vm.RecordButtonGlyph, Mode=OneWay}" FontSize="16" />
+                                            <TextBlock Text="{x:Bind Vm.RecordButtonText, Mode=OneWay}" />
+                                        </StackPanel>
+                                    </Button>
+                                    <TextBlock Text="{x:Bind Vm.RecordingTimeText, Mode=OneWay}" Style="{StaticResource SubtitleTextBlockStyle}"
+                                               VerticalAlignment="Center" />
+                                </StackPanel>
+                                <ProgressBar Maximum="1" Value="{x:Bind Vm.RecordingMeter, Mode=OneWay}" />
+                                <TextBlock Text="После остановки откроется обрезка — выделите мышкой нужный кусок." TextWrapping="Wrap"
+                                           Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                            </StackPanel>
+                        </Border>
+
+                        <TextBlock Text="Повтор" Style="{StaticResource BodyStrongTextBlockStyle}" Margin="0,8,0,0" />
+                        <Border Padding="16" CornerRadius="8" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}">
+                            <StackPanel Spacing="12">
+                                <ToggleSwitch Header="Постоянно хранить последние секунды звука компьютера" IsOn="{x:Bind Vm.ReplayEnabled, Mode=TwoWay}"
+                                              OnContent="Включено" OffContent="Выключено" />
+                                <Grid ColumnDefinitions="Auto,*" ColumnSpacing="12">
+                                    <TextBlock Text="Длина буфера" VerticalAlignment="Center" />
+                                    <Slider Grid.Column="1" Minimum="10" Maximum="120" StepFrequency="5" Value="{x:Bind Vm.ReplaySeconds, Mode=TwoWay}"
+                                            AutomationProperties.Name="Длина буфера повтора" />
+                                </Grid>
+                                <TextBlock Text="{x:Bind Vm.ReplayStatusText, Mode=OneWay}" Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextWrapping="Wrap" />
+                                <Button Command="{x:Bind Vm.SaveReplayCommand}" AutomationProperties.Name="Сохранить повтор">
+                                    <StackPanel Orientation="Horizontal" Spacing="8">
+                                        <FontIcon Glyph="&#xE74E;" FontSize="14" />
+                                        <TextBlock Text="{x:Bind Vm.ReplaySaveText, Mode=OneWay}" />
+                                    </StackPanel>
+                                </Button>
+                                <TextBlock Text="Клавиши для записи и повтора — в Настройках → «Горячие клавиши». Работают и в полноэкранных играх."
+                                           TextWrapping="Wrap" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                            </StackPanel>
+                        </Border>
+                    </StackPanel>
+                </ScrollViewer>
 
                 <!-- Настройки -->
                 <ScrollViewer x:Name="SettingsPanel" Visibility="Collapsed" Padding="24,12,24,24">
@@ -227,7 +283,17 @@
                         </Grid>
 
                         <TextBlock Text="Горячие клавиши" Style="{StaticResource BodyStrongTextBlockStyle}" Margin="0,8,0,0" />
-                        <Grid ColumnDefinitions="200,*,Auto" ColumnSpacing="8">
+                        <Grid ColumnDefinitions="200,*,Auto" RowDefinitions="Auto,Auto,Auto" RowSpacing="10" ColumnSpacing="8">
+                            <TextBlock Grid.Row="1" Text="Начать/остановить запись" VerticalAlignment="Center" />
+                            <TextBlock Grid.Row="1" Grid.Column="1" Text="{x:Bind Vm.RecordHotkeyText, Mode=OneWay}" VerticalAlignment="Center"
+                                       Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                            <Button Grid.Row="1" Grid.Column="2" Content="Назначить…" Command="{x:Bind Vm.AssignRecordHotkeyCommand}"
+                                    AutomationProperties.Name="Назначить клавишу записи" />
+                            <TextBlock Grid.Row="2" Text="Сохранить повтор" VerticalAlignment="Center" />
+                            <TextBlock Grid.Row="2" Grid.Column="1" Text="{x:Bind Vm.ReplayHotkeyText, Mode=OneWay}" VerticalAlignment="Center"
+                                       Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                            <Button Grid.Row="2" Grid.Column="2" Content="Назначить…" Command="{x:Bind Vm.AssignReplayHotkeyCommand}"
+                                    AutomationProperties.Name="Назначить клавишу повтора" />
                             <TextBlock Text="Клавиша «Стоп всё»" VerticalAlignment="Center" />
                             <TextBlock Grid.Column="1" Text="{x:Bind Vm.StopAllHotkeyText, Mode=OneWay}" VerticalAlignment="Center"
                                        Foreground="{ThemeResource TextFillColorSecondaryBrush}" />

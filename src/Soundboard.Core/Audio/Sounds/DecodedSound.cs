@@ -77,7 +77,7 @@ public sealed class DecodedSound
     /// Создаёт звук из готового массива (без копирования, массив переходит во владение звука)
     /// и вычисляет пик.
     /// </summary>
-    internal static DecodedSound FromSamples(float[] interleavedStereo, SoundSourceInfo? source = null)
+    public static DecodedSound FromSamples(float[] interleavedStereo, SoundSourceInfo? source = null)
     {
         ArgumentNullException.ThrowIfNull(interleavedStereo);
         return new DecodedSound(interleavedStereo, ComputePeak(interleavedStereo), source);

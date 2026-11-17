@@ -32,6 +32,13 @@ public static class ControlCommands
     public const string StopAll = "stop_all";
     public const string SetVolume = "set_volume";
     public const string GetStatus = "get_status";
+    public const string SetHotkey = "set_hotkey";
+    public const string StartRecording = "start_recording";
+    public const string StopRecording = "stop_recording";
+    public const string SaveLastSeconds = "save_last_seconds";
+    public const string RenameSound = "rename_sound";
+    public const string DeleteSound = "delete_sound";
+    public const string TrimSound = "trim_sound";
 }
 
 /// <summary>Коды ошибок.</summary>
@@ -144,12 +151,53 @@ public sealed record StatusInfo(
     int SoundCount,
     IReadOnlyList<string> Issues);
 
+/// <summary>Звук по имени (точному или части) или id.</summary>
+public sealed record SoundRefArgs(string? Name = null, string? Id = null);
+
+/// <summary>set_hotkey: target = имя/id звука, «stop_all», «record» или «replay»; hotkey пустой — убрать.</summary>
+public sealed record SetHotkeyArgs(string Target, string? Hotkey);
+
+/// <summary>Результат set_hotkey.</summary>
+public sealed record HotkeyInfo(string Target, string? Hotkey);
+
+/// <summary>start_recording: source = system (звук компьютера) или mic.</summary>
+public sealed record StartRecordingArgs(string Source = "system");
+
+/// <summary>stop_recording / save_last_seconds: имя нового звука (необязательно).</summary>
+public sealed record SaveSoundArgs(string? Name = null, double Seconds = 0);
+
+/// <summary>Состояние записи.</summary>
+public sealed record RecordingInfo(bool Recording, string? Source, double ElapsedSeconds, bool ReplayEnabled, double ReplayBufferedSeconds);
+
+/// <summary>rename_sound.</summary>
+public sealed record RenameSoundArgs(string? Name, string? Id, string NewName);
+
+/// <summary>trim_sound: оставить кусок [start, end) секунд.</summary>
+public sealed record TrimSoundArgs(string? Name, string? Id, double Start, double End);
+
+/// <summary>Удалённый звук.</summary>
+public sealed record DeletedInfo(string Id, string Name);
+
 /// <summary>
 /// Команды саундборда, независимые от транспорта: их реализует приложение, а вызывают
 /// сервер named pipe (сейчас) и внешний канал (позже). Ошибки — <see cref="ControlException"/>.
 /// </summary>
 public interface ISoundboardControl
 {
+    Task<HotkeyInfo> SetHotkeyAsync(SetHotkeyArgs args, CancellationToken ct);
+
+    Task<RecordingInfo> StartRecordingAsync(StartRecordingArgs args, CancellationToken ct);
+
+    Task<SoundInfo> StopRecordingAsync(SaveSoundArgs args, CancellationToken ct);
+
+    Task<SoundInfo> SaveLastSecondsAsync(SaveSoundArgs args, CancellationToken ct);
+
+    Task<SoundInfo> RenameSoundAsync(RenameSoundArgs args, CancellationToken ct);
+
+    Task<DeletedInfo> DeleteSoundAsync(SoundRefArgs args, CancellationToken ct);
+
+    Task<SoundInfo> TrimSoundAsync(TrimSoundArgs args, CancellationToken ct);
+
     Task<SoundList> ListSoundsAsync(CancellationToken ct);
 
     Task<PlayInfo> PlaySoundAsync(PlaySoundArgs args, CancellationToken ct);

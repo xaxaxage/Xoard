@@ -65,8 +65,35 @@ public sealed class McpServerTests : IAsyncLifetime
 
         var tools = await client.ListToolsAsync(cancellationToken: Ct);
 
-        Assert.Equal(["get_status", "list_sounds", "play_sound", "set_volume", "stop_all"], tools.Select(t => t.Name).Order());
+        Assert.Equal(
+            ["delete_sound", "get_status", "list_sounds", "play_sound", "rename_sound", "save_last_seconds", "set_hotkey",
+             "set_volume", "start_recording", "stop_all", "stop_recording", "trim_sound"],
+            tools.Select(t => t.Name).Order());
         Assert.All(tools, t => Assert.False(string.IsNullOrWhiteSpace(t.Description)));
+    }
+
+    [Fact]
+    public async Task Stage5_tools_reach_the_app()
+    {
+        await using var client = await StartAsync(pipe);
+
+        await client.CallToolAsync("set_hotkey", new Dictionary<string, object?> { ["target"] = "replay", ["hotkey"] = "Ctrl+Alt+R" }, cancellationToken: Ct);
+        await client.CallToolAsync("start_recording", new Dictionary<string, object?> { ["source"] = "mic" }, cancellationToken: Ct);
+        var stopped = await client.CallToolAsync("stop_recording", new Dictionary<string, object?> { ["name"] = "Мой смех" }, cancellationToken: Ct);
+        var replay = await client.CallToolAsync("save_last_seconds", new Dictionary<string, object?> { ["seconds"] = 10, ["name"] = "Момент" }, cancellationToken: Ct);
+        await client.CallToolAsync("rename_sound", new Dictionary<string, object?> { ["name"] = "air", ["newName"] = "Гудок" }, cancellationToken: Ct);
+        await client.CallToolAsync("delete_sound", new Dictionary<string, object?> { ["id"] = "airhorn.mp3" }, cancellationToken: Ct);
+        var trimmed = await client.CallToolAsync("trim_sound", new Dictionary<string, object?> { ["name"] = "air", ["start"] = 0.5, ["end"] = 2 }, cancellationToken: Ct);
+        var badTrim = await client.CallToolAsync("trim_sound", new Dictionary<string, object?> { ["name"] = "air", ["start"] = 2, ["end"] = 1 }, cancellationToken: Ct);
+
+        Assert.Contains("Мой смех", Text(stopped), StringComparison.Ordinal);
+        Assert.Contains("Момент", Text(replay), StringComparison.Ordinal);
+        Assert.Contains("\"durationSeconds\": 1.5", Text(trimmed), StringComparison.Ordinal);
+        Assert.True(badTrim.IsError);
+        Assert.Equal(
+            ["hotkey:replay:Ctrl+Alt+R", "record:mic", "stop-record:Мой смех", "replay:10:Момент", "rename:air:Гудок",
+             "delete:airhorn.mp3", "trim:air:0.5-2", "trim:air:2-1"],
+            fake.Calls);
     }
 
     [Fact]

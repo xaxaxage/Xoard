@@ -133,6 +133,9 @@ public sealed partial class SoundItem : ObservableObject
     private void AssignHotkey() => host.RequestHotkey(this);
 
     [RelayCommand]
+    private void Trim() => host.RequestTrim(this);
+
+    [RelayCommand]
     private void Delete() => host.Delete(this);
 
     [RelayCommand]

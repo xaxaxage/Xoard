@@ -1,5 +1,7 @@
 using Soundboard.Core.Audio;
+using Microsoft.UI.Xaml.Controls;
 using Soundboard.Core.Audio.Status;
+using Soundboard.Core.Recording;
 using Soundboard.Protocol;
 
 namespace Soundboard.App.ViewModels;
@@ -91,6 +93,168 @@ public sealed partial class MainViewModel : ISoundboardControl
             Sounds.Count,
             s.Issues.Select(i => i.Message).ToList());
     });
+
+    // ───────── этап 5: клавиши, запись, повтор, переименование, удаление, обрезка ─────────
+
+    public Task<HotkeyInfo> SetHotkeyAsync(SetHotkeyArgs args, CancellationToken ct) => OnUi(() =>
+    {
+        var target = (args.Target ?? "").Trim().ToLowerInvariant() switch
+        {
+            "stop_all" or "stop" or "стоп всё" or "стоп" => HotkeyTarget.StopAll,
+            "record" or "recording" or "запись" => HotkeyTarget.Record,
+            "replay" or "повтор" => HotkeyTarget.Replay,
+            // Звук: точный id (имя файла) или имя/часть имени
+            _ => HotkeyTarget.ForSound(byFile.TryGetValue(args.Target?.Trim() ?? "", out var byId) ? byId : FindSound(args.Target, null)),
+        };
+
+        Soundboard.Core.Hotkeys.HotkeyGesture? gesture = null;
+        if (!string.IsNullOrWhiteSpace(args.Hotkey))
+        {
+            if (!Soundboard.Core.Hotkeys.HotkeyGesture.TryParse(args.Hotkey, out var g))
+                throw new ControlException(ControlErrorCodes.BadRequest, $"Не понял сочетание «{args.Hotkey}». Примеры: Ctrl+Alt+1, F9, Num5.");
+            gesture = g;
+        }
+
+        // Свои же сочетания не должны мешать проверке занятости
+        SuspendHotkeys();
+        string? error;
+        try
+        {
+            error = SetHotkey(target, gesture);
+        }
+        finally
+        {
+            ResumeHotkeys();
+        }
+
+        if (error is not null)
+            throw new ControlException(ControlErrorCodes.BadRequest, error);
+        return new HotkeyInfo(target.Kind == HotkeyKind.Sound ? target.Sound!.Name : args.Target!, gesture?.ToString());
+    });
+
+    public Task<RecordingInfo> StartRecordingAsync(StartRecordingArgs args, CancellationToken ct) => OnUiAsync(async () =>
+    {
+        var source = (args.Source ?? "system").Trim().ToLowerInvariant() switch
+        {
+            "system" or "computer" or "компьютер" => RecordingSource.System,
+            "mic" or "microphone" or "микрофон" => RecordingSource.Microphone,
+            _ => throw new ControlException(ControlErrorCodes.BadRequest, "source должен быть system или mic."),
+        };
+        if (recorder.Recording is not null)
+            throw new ControlException(ControlErrorCodes.BadRequest, "Запись уже идёт — сначала stop_recording.");
+
+        try
+        {
+            await recorder.StartRecordingAsync(source, config.Audio.MicDeviceId).ConfigureAwait(true);
+        }
+        catch (InvalidOperationException ex)
+        {
+            throw new ControlException(ControlErrorCodes.Unavailable, ex.Message);
+        }
+
+        IsRecording = true;
+        return RecordingState();
+    });
+
+    public Task<SoundInfo> StopRecordingAsync(SaveSoundArgs args, CancellationToken ct) => OnUiAsync(async () =>
+    {
+        if (recorder.Recording is null)
+            throw new ControlException(ControlErrorCodes.BadRequest, "Запись не идёт — сначала start_recording.");
+        var path = await recorder.StopRecordingAsync(library.Folder, CleanName(args.Name)).ConfigureAwait(true);
+        IsRecording = false;
+        if (path is null)
+            throw new ControlException(ControlErrorCodes.Unavailable, "Запись слишком короткая — ничего не сохранено.");
+        var item = AddRecordedFile(path);
+        ShowToast($"Запись сохранена: «{item.Name}».", InfoBarSeverity.Success);
+        return await LoadedInfoAsync(item).ConfigureAwait(true);
+    });
+
+    public Task<SoundInfo> SaveLastSecondsAsync(SaveSoundArgs args, CancellationToken ct) => OnUiAsync(async () =>
+    {
+        var seconds = args.Seconds > 0 ? args.Seconds : ReplaySeconds;
+        string path;
+        try
+        {
+            path = await recorder.SaveReplayAsync(seconds, library.Folder, CleanName(args.Name)).ConfigureAwait(true);
+        }
+        catch (InvalidOperationException ex)
+        {
+            throw new ControlException(ControlErrorCodes.Unavailable, ex.Message);
+        }
+
+        var item = AddRecordedFile(path);
+        ShowToast($"Повтор сохранён: «{item.Name}».", InfoBarSeverity.Success);
+        return await LoadedInfoAsync(item).ConfigureAwait(true);
+    });
+
+    public Task<SoundInfo> RenameSoundAsync(RenameSoundArgs args, CancellationToken ct) => OnUiAsync(async () =>
+    {
+        var item = FindSound(args.Name, args.Id);
+        var error = Rename(item, args.NewName ?? "");
+        if (error is not null)
+            throw new ControlException(ControlErrorCodes.BadRequest, error);
+        return await LoadedInfoAsync(item).ConfigureAwait(true);
+    });
+
+    public Task<DeletedInfo> DeleteSoundAsync(SoundRefArgs args, CancellationToken ct) => OnUi(() =>
+    {
+        var item = FindSound(args.Name, args.Id);
+        var info = new DeletedInfo(item.File.FileName, item.Name);
+        Delete(item);
+        if (Sounds.Contains(item))
+            throw new ControlException(ControlErrorCodes.Unavailable, $"Не удалось удалить «{item.Name}».");
+        return info;
+    });
+
+    public Task<SoundInfo> TrimSoundAsync(TrimSoundArgs args, CancellationToken ct) => OnUiAsync(async () =>
+    {
+        var item = FindSound(args.Name, args.Id);
+        var error = await TrimAsync(item, args.Start, args.End).ConfigureAwait(true);
+        if (error is not null)
+            throw new ControlException(ControlErrorCodes.BadRequest, error);
+        return await LoadedInfoAsync(item).ConfigureAwait(true);
+    });
+
+    private RecordingInfo RecordingState() => new(
+        recorder.Recording is not null,
+        recorder.Recording switch { RecordingSource.System => "system", RecordingSource.Microphone => "mic", _ => null },
+        Math.Round(recorder.RecordingElapsed.TotalSeconds, 1),
+        recorder.ReplayEnabled,
+        Math.Round(recorder.ReplayBufferedSeconds, 1));
+
+    /// <summary>Дождаться загрузки звука (до 10 с), чтобы вернуть его длительность.</summary>
+    private async Task<SoundInfo> LoadedInfoAsync(SoundItem item)
+    {
+        for (var i = 0; i < 100 && item.IsLoading; i++)
+            await Task.Delay(100).ConfigureAwait(true);
+        return ToInfo(item);
+    }
+
+    private static string? CleanName(string? name) => string.IsNullOrWhiteSpace(name) ? null : name.Trim();
+
+    private SoundItem FindSound(string? name, string? id) => FindSound(new PlaySoundArgs(name, id));
+
+    /// <summary>Выполнить асинхронную работу в потоке интерфейса и дождаться результата.</summary>
+    private Task<T> OnUiAsync<T>(Func<Task<T>> func)
+    {
+        var tcs = new TaskCompletionSource<T>(TaskCreationOptions.RunContinuationsAsynchronously);
+        if (!dispatcher.TryEnqueue(async () =>
+            {
+                try
+                {
+                    tcs.SetResult(await func().ConfigureAwait(true));
+                }
+                catch (Exception ex)
+                {
+                    tcs.SetException(ex);
+                }
+            }))
+        {
+            tcs.SetException(new ControlException(ControlErrorCodes.Unavailable, "Soundboard закрывается."));
+        }
+
+        return tcs.Task;
+    }
 
     private VolumeInfo Volumes() => new(Math.Round(HeadphonesLevel), Math.Round(CableLevel), Math.Round(MicLevel), MicMuted);
 

@@ -9,8 +9,10 @@ using Microsoft.UI.Xaml.Media;
 using Microsoft.UI.Xaml.Media.Animation;
 using Soundboard.App.ViewModels;
 using Soundboard.Core.Config;
+using Soundboard.Core.Audio.Sounds;
 using Soundboard.Core.Hotkeys;
 using Soundboard.Core.Library;
+using Soundboard.Core.Recording;
 using Windows.ApplicationModel.DataTransfer;
 using Windows.Graphics;
 using Windows.Storage;
@@ -29,7 +31,8 @@ public sealed partial class MainWindow : Window
         InitializeComponent();
         Vm = new MainViewModel(DispatcherQueue);
         Vm.RenameRequested += item => _ = RenameAsync(item);
-        Vm.HotkeyRequested += item => _ = AssignHotkeyAsync(item);
+        Vm.HotkeyRequested += target => _ = AssignHotkeyAsync(target);
+        Vm.TrimRequested += item => _ = TrimAsync(item);
 
         SystemBackdrop = new MicaBackdrop();
         if (AppWindow.Presenter is OverlappedPresenter presenter)
@@ -154,9 +157,9 @@ public sealed partial class MainWindow : Window
     /// Запись сочетания: пока диалог открыт, все горячие клавиши сняты, иначе нажатие уже
     /// назначенного сочетания сработало бы вместо записи.
     /// </summary>
-    private async Task AssignHotkeyAsync(SoundItem? item)
+    private async Task AssignHotkeyAsync(HotkeyTarget target)
     {
-        var current = Vm.CurrentHotkey(item);
+        var current = Vm.CurrentHotkey(target);
         HotkeyGesture? captured = null;
 
         var shown = new TextBlock
@@ -169,7 +172,7 @@ public sealed partial class MainWindow : Window
         var dialog = new ContentDialog
         {
             XamlRoot = Root.XamlRoot,
-            Title = item is null ? "Клавиша «Стоп всё»" : $"Клавиша для «{item.Name}»",
+            Title = target.Title,
             Content = new StackPanel
             {
                 Spacing = 12,
@@ -230,14 +233,14 @@ public sealed partial class MainWindow : Window
 
         dialog.PrimaryButtonClick += (_, args) =>
         {
-            var message = Vm.SetHotkey(item, captured);
+            var message = Vm.SetHotkey(target, captured);
             if (message is not null)
             {
                 error.Text = message;
                 args.Cancel = true;
             }
         };
-        dialog.SecondaryButtonClick += (_, _) => Vm.SetHotkey(item, null);
+        dialog.SecondaryButtonClick += (_, _) => Vm.SetHotkey(target, null);
 
         Vm.SuspendHotkeys();
         try
@@ -250,6 +253,153 @@ public sealed partial class MainWindow : Window
         }
     }
 
+    /// <summary>
+    /// Обрезка: форма волны, выделение мышкой, прослушать выделенное (только себе), сохранить.
+    /// Сначала выделено всё, кроме тишины по краям.
+    /// </summary>
+    private async Task TrimAsync(SoundItem item)
+    {
+        DecodedSound sound;
+        try
+        {
+            sound = await Vm.DecodeForEditorAsync(item);
+        }
+        catch (SoundLoadException ex)
+        {
+            Vm.ShowToast(ex.Message, InfoBarSeverity.Error);
+            return;
+        }
+
+        const double width = 720;
+        const double height = 140;
+        var duration = sound.Duration.TotalSeconds;
+        if (duration <= 0)
+            return;
+
+        var peaks = AudioClips.Peaks(sound.Samples, (int)width);
+        var mid = height / 2;
+        var figure = new PathFigure { StartPoint = new Windows.Foundation.Point(0, mid), IsClosed = true, IsFilled = true };
+        for (var x = 0; x < peaks.Length; x++)
+            figure.Segments.Add(new LineSegment { Point = new Windows.Foundation.Point(x, mid - (peaks[x].Max * mid * 0.95)) });
+        for (var x = peaks.Length - 1; x >= 0; x--)
+            figure.Segments.Add(new LineSegment { Point = new Windows.Foundation.Point(x, mid - (peaks[x].Min * mid * 0.95)) });
+
+        var wave = new Microsoft.UI.Xaml.Shapes.Path
+        {
+            Data = new PathGeometry { Figures = { figure } },
+            Fill = (Brush)Application.Current.Resources["TextFillColorSecondaryBrush"],
+        };
+        var selectionRect = new Microsoft.UI.Xaml.Shapes.Rectangle
+        {
+            Height = height,
+            Fill = (Brush)Application.Current.Resources["AccentFillColorDefaultBrush"],
+            Opacity = 0.28,
+        };
+        var canvas = new Canvas
+        {
+            Width = width,
+            Height = height,
+            Background = (Brush)Application.Current.Resources["CardBackgroundFillColorDefaultBrush"],
+            Children = { wave, selectionRect },
+        };
+
+        // Начальное выделение: без тишины по краям (с запасом 0,1 с)
+        var first = Array.FindIndex(peaks, p => Math.Max(Math.Abs(p.Min), Math.Abs(p.Max)) > 0.02f);
+        var last = Array.FindLastIndex(peaks, p => Math.Max(Math.Abs(p.Min), Math.Abs(p.Max)) > 0.02f);
+        double selStart = first < 0 ? 0 : Math.Max(0, (first / width * duration) - 0.1);
+        double selEnd = last < 0 ? duration : Math.Min(duration, ((last + 1) / width * duration) + 0.1);
+
+        var info = new TextBlock { Foreground = (Brush)Application.Current.Resources["TextFillColorSecondaryBrush"] };
+        var error = new TextBlock { Foreground = (Brush)Application.Current.Resources["SystemFillColorCriticalBrush"], TextWrapping = TextWrapping.Wrap };
+
+        void Redraw()
+        {
+            Canvas.SetLeft(selectionRect, selStart / duration * width);
+            selectionRect.Width = Math.Max(1, (selEnd - selStart) / duration * width);
+            info.Text = $"Начало {selStart:0.00} с · конец {selEnd:0.00} с · останется {selEnd - selStart:0.00} из {duration:0.00} с";
+        }
+
+        double anchor = 0;
+        var dragging = false;
+        canvas.PointerPressed += (_, e) =>
+        {
+            dragging = true;
+            canvas.CapturePointer(e.Pointer);
+            anchor = Math.Clamp(e.GetCurrentPoint(canvas).Position.X, 0, width) / width * duration;
+        };
+        canvas.PointerMoved += (_, e) =>
+        {
+            if (!dragging)
+                return;
+            var t = Math.Clamp(e.GetCurrentPoint(canvas).Position.X, 0, width) / width * duration;
+            if (Math.Abs(t - anchor) < duration / width * 2)
+                return;
+            selStart = Math.Min(anchor, t);
+            selEnd = Math.Max(anchor, t);
+            Redraw();
+        };
+        canvas.PointerReleased += (_, e) =>
+        {
+            dragging = false;
+            canvas.ReleasePointerCapture(e.Pointer);
+        };
+
+        var preview = new Button { Content = "Прослушать выделенное" };
+        preview.Click += (_, _) => Vm.PreviewSlice(sound, selStart, selEnd);
+        var reset = new Button { Content = "Выделить всё" };
+        reset.Click += (_, _) =>
+        {
+            selStart = 0;
+            selEnd = duration;
+            Redraw();
+        };
+        Redraw();
+
+        var dialog = new ContentDialog
+        {
+            XamlRoot = Root.XamlRoot,
+            Title = $"Обрезка «{item.Name}»",
+            Content = new StackPanel
+            {
+                Spacing = 10,
+                Children =
+                {
+                    new TextBlock { Text = "Выделите мышкой кусок, который нужно оставить.", TextWrapping = TextWrapping.Wrap },
+                    new Border { CornerRadius = new CornerRadius(8), Child = canvas },
+                    info,
+                    new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, Children = { preview, reset } },
+                    error,
+                },
+            },
+            PrimaryButtonText = "Сохранить обрезку",
+            CloseButtonText = "Оставить как есть",
+            DefaultButton = ContentDialogButton.Primary,
+        };
+        dialog.Resources["ContentDialogMaxWidth"] = 900.0;
+
+        dialog.PrimaryButtonClick += async (_, args) =>
+        {
+            var deferral = args.GetDeferral();
+            try
+            {
+                if (selStart <= 0.001 && selEnd >= duration - 0.001)
+                    return;   // выделено всё — нечего резать
+                var message = await Vm.TrimAsync(item, selStart, selEnd);
+                if (message is not null)
+                {
+                    error.Text = message;
+                    args.Cancel = true;
+                }
+            }
+            finally
+            {
+                deferral.Complete();
+            }
+        };
+
+        await dialog.ShowAsync();
+    }
+
     private static bool IsDown(Windows.System.VirtualKey key) =>
         Microsoft.UI.Input.InputKeyboardSource.GetKeyStateForCurrentThread(key).HasFlag(Windows.UI.Core.CoreVirtualKeyStates.Down);
 
@@ -258,7 +408,9 @@ public sealed partial class MainWindow : Window
     private void OnNavigationChanged(NavigationView sender, NavigationViewSelectionChangedEventArgs args)
     {
         var settings = args.IsSettingsSelected;
-        SoundsPanel.Visibility = settings ? Visibility.Collapsed : Visibility.Visible;
+        var recording = !settings && ReferenceEquals(args.SelectedItem, RecordNavItem);
+        SoundsPanel.Visibility = settings || recording ? Visibility.Collapsed : Visibility.Visible;
+        RecordingPanel.Visibility = recording ? Visibility.Visible : Visibility.Collapsed;
         SettingsPanel.Visibility = settings ? Visibility.Visible : Visibility.Collapsed;
     }
 

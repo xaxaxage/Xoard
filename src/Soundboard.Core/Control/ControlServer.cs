@@ -22,6 +22,13 @@ public sealed class ControlDispatcher(ISoundboardControl control)
                 ControlCommands.StopAll => await StopAllAsync(ct).ConfigureAwait(false),
                 ControlCommands.SetVolume => await control.SetVolumeAsync(Args<SetVolumeArgs>(request), ct).ConfigureAwait(false),
                 ControlCommands.GetStatus => await control.GetStatusAsync(ct).ConfigureAwait(false),
+                ControlCommands.SetHotkey => await control.SetHotkeyAsync(Args<SetHotkeyArgs>(request), ct).ConfigureAwait(false),
+                ControlCommands.StartRecording => await control.StartRecordingAsync(OptionalArgs<StartRecordingArgs>(request) ?? new(), ct).ConfigureAwait(false),
+                ControlCommands.StopRecording => await control.StopRecordingAsync(OptionalArgs<SaveSoundArgs>(request) ?? new(), ct).ConfigureAwait(false),
+                ControlCommands.SaveLastSeconds => await control.SaveLastSecondsAsync(Args<SaveSoundArgs>(request), ct).ConfigureAwait(false),
+                ControlCommands.RenameSound => await control.RenameSoundAsync(Args<RenameSoundArgs>(request), ct).ConfigureAwait(false),
+                ControlCommands.DeleteSound => await control.DeleteSoundAsync(Args<SoundRefArgs>(request), ct).ConfigureAwait(false),
+                ControlCommands.TrimSound => await control.TrimSoundAsync(Args<TrimSoundArgs>(request), ct).ConfigureAwait(false),
                 _ => throw new ControlException(ControlErrorCodes.UnknownCommand, $"Неизвестная команда «{request.Command}»."),
             };
             return ControlResponse.Success(id, result);
@@ -49,6 +56,9 @@ public sealed class ControlDispatcher(ISoundboardControl control)
         await control.StopAllAsync(ct).ConfigureAwait(false);
         return new { stopped = true };
     }
+
+    private static T? OptionalArgs<T>(ControlRequest request) where T : class =>
+        request.Args is { ValueKind: JsonValueKind.Object } args ? args.Deserialize<T>(ControlProtocol.Json) : null;
 
     private static T Args<T>(ControlRequest request)
     {

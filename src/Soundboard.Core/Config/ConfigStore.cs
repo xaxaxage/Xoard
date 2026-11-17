@@ -25,6 +25,21 @@ public sealed record AppConfig
     /// <summary>Горячая клавиша «Стоп всё» (null — не назначена).</summary>
     public string? StopAllHotkey { get; init; }
 
+    /// <summary>Горячая клавиша «Начать/остановить запись».</summary>
+    public string? RecordHotkey { get; init; }
+
+    /// <summary>Горячая клавиша «Сохранить повтор».</summary>
+    public string? ReplayHotkey { get; init; }
+
+    /// <summary>Повтор: постоянно хранить последние N секунд звука компьютера.</summary>
+    public bool ReplayEnabled { get; init; } = true;
+
+    /// <summary>Длина буфера повтора, секунд (10–120).</summary>
+    public int ReplaySeconds { get; init; } = 30;
+
+    /// <summary>Источник записи: System (звук компьютера) или Microphone.</summary>
+    public Soundboard.Core.Recording.RecordingSource RecordSource { get; init; } = Soundboard.Core.Recording.RecordingSource.System;
+
     /// <summary>Анимации интерфейса (выключаются и при отключённых анимациях Windows).</summary>
     public bool AnimationsEnabled { get; init; } = true;
 
