@@ -15,7 +15,6 @@
             <Image Source="ms-appx:///Assets/Logo.png" Width="40" Height="40" AutomationProperties.AccessibilityView="Raw" />
             <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="1">
                 <TextBlock Text="Xoard" Style="{StaticResource XTitle}" LineHeight="26" />
-                <TextBlock Text="{x:Bind Vm.HumorLine, Mode=OneWay}" Style="{StaticResource XSub}" TextWrapping="NoWrap" TextTrimming="CharacterEllipsis" />
             </StackPanel>
 
             <Grid Grid.Column="2" Width="230" VerticalAlignment="Center">
@@ -79,12 +78,12 @@
                 </StackPanel>
 
                 <Grid Grid.Column="1" RowDefinitions="*,Auto" RowSpacing="4" AutomationProperties.Name="Волна последних секунд звука компьютера">
-                    <controls:WaveView x:Name="LiveWave" WaveBrush="{StaticResource XPrimary}" LineBrush="{StaticResource XWave}" />
+                    <controls:LiveWaveView Source="{x:Bind Vm.LiveWave}" Divisions="{x:Bind Vm.ReplayDivisions, Mode=OneWay}" PeakBrush="{StaticResource XWave}" RmsBrush="{StaticResource XPrimary}" LineBrush="{StaticResource XWave}" TickBrush="{StaticResource XLine}" />
                     <Rectangle Width="2" HorizontalAlignment="Right" Fill="{StaticResource XAccent}" Margin="0,-2,0,-2" />
                     <Grid Grid.Row="1" ColumnDefinitions="*,*,*,Auto">
-                        <TextBlock Text="{x:Bind Vm.ReplayTickFar, Mode=OneWay}" Style="{StaticResource XCap}" FontWeight="Normal" />
-                        <TextBlock Grid.Column="1" Text="{x:Bind Vm.ReplayTickMid, Mode=OneWay}" Style="{StaticResource XCap}" FontWeight="Normal" />
-                        <TextBlock Grid.Column="2" Text="{x:Bind Vm.ReplayTickNear, Mode=OneWay}" Style="{StaticResource XCap}" FontWeight="Normal" />
+                        <TextBlock FontFamily="{StaticResource XFontMono}" Text="{x:Bind Vm.ReplayTickFar, Mode=OneWay}" Style="{StaticResource XCap}" FontWeight="Normal" />
+                        <TextBlock FontFamily="{StaticResource XFontMono}" Grid.Column="1" Text="{x:Bind Vm.ReplayTickMid, Mode=OneWay}" Style="{StaticResource XCap}" FontWeight="Normal" />
+                        <TextBlock FontFamily="{StaticResource XFontMono}" Grid.Column="2" Text="{x:Bind Vm.ReplayTickNear, Mode=OneWay}" Style="{StaticResource XCap}" FontWeight="Normal" />
                         <TextBlock Grid.Column="3" Text="сейчас" Style="{StaticResource XCap}" Foreground="{StaticResource XInk}" />
                     </Grid>
                 </Grid>
@@ -198,10 +197,10 @@
                                     <controls:WaveView Grid.Row="1" Height="26" VerticalAlignment="Center" Peaks="{x:Bind Wave, Mode=OneWay}" Progress="{x:Bind Progress, Mode=OneWay}"
                                                        WaveBrush="{StaticResource XWave}" PlayedBrush="{StaticResource XPrimary}" />
                                     <Grid Grid.Row="2" ColumnDefinitions="Auto,*,Auto">
-                                        <TextBlock Text="{x:Bind DurationText, Mode=OneWay}" Style="{StaticResource XSub}" TextWrapping="NoWrap" VerticalAlignment="Center" />
+                                        <TextBlock FontFamily="{StaticResource XFontMono}" Text="{x:Bind DurationText, Mode=OneWay}" Style="{StaticResource XSub}" TextWrapping="NoWrap" VerticalAlignment="Center" />
                                         <Border Grid.Column="2" Padding="6,1" BorderBrush="{StaticResource XLine}" BorderThickness="1" VerticalAlignment="Center"
                                                 CornerRadius="{Binding Chip, Source={StaticResource Shape}}" Visibility="{x:Bind HasHotkey, Mode=OneWay}">
-                                            <TextBlock Text="{x:Bind HotkeyText, Mode=OneWay}" Style="{StaticResource XCap}" TextTrimming="CharacterEllipsis" MaxWidth="120" />
+                                            <TextBlock FontFamily="{StaticResource XFontMono}" Text="{x:Bind HotkeyText, Mode=OneWay}" Style="{StaticResource XCap}" TextTrimming="CharacterEllipsis" MaxWidth="120" />
                                         </Border>
                                     </Grid>
                                 </Grid>
@@ -245,7 +244,7 @@
                                     </Grid>
                                 </Button>
                                 <StackPanel VerticalAlignment="Center" Spacing="4">
-                                    <TextBlock Text="{x:Bind Vm.RecordingTimeText, Mode=OneWay}" FontFamily="{StaticResource XFontDisplay}" FontSize="30" FontWeight="Bold" LineHeight="32" />
+                                    <TextBlock Text="{x:Bind Vm.RecordingTimeText, Mode=OneWay}" FontFamily="{StaticResource XFontMono}" FontSize="30" FontWeight="Bold" LineHeight="32" />
                                     <TextBlock Text="Потом выделите нужный кусок" Style="{StaticResource XSub}" />
                                 </StackPanel>
                             </StackPanel>
@@ -260,25 +259,25 @@
                             <TextBlock Text="Громкость" Style="{StaticResource XHead}" Margin="0,0,0,6" />
                             <Grid ColumnDefinitions="*,Auto">
                                 <TextBlock Text="Мне в наушники" FontSize="14" />
-                                <TextBlock Grid.Column="1" Text="{x:Bind Vm.HeadphonesText, Mode=OneWay}" Style="{StaticResource XSub}" />
+                                <TextBlock FontFamily="{StaticResource XFontMono}" Grid.Column="1" Text="{x:Bind Vm.HeadphonesText, Mode=OneWay}" Style="{StaticResource XSub}" />
                             </Grid>
-                            <Slider AutomationProperties.Name="Громкость в наушниках" Minimum="0" Maximum="100" StepFrequency="1" IsThumbToolTipEnabled="False"
+                            <Slider AutomationProperties.Name="Громкость в наушниках" Minimum="0" Maximum="200" TickFrequency="100" TickPlacement="Outside" StepFrequency="1" IsThumbToolTipEnabled="False"
                                     Value="{x:Bind Vm.HeadphonesLevel, Mode=TwoWay}" />
                             <Grid ColumnDefinitions="*,Auto">
                                 <TextBlock Text="Звуки друзьям" FontSize="14" />
-                                <TextBlock Grid.Column="1" Text="{x:Bind Vm.CableText, Mode=OneWay}" Style="{StaticResource XSub}" />
+                                <TextBlock FontFamily="{StaticResource XFontMono}" Grid.Column="1" Text="{x:Bind Vm.CableText, Mode=OneWay}" Style="{StaticResource XSub}" />
                             </Grid>
-                            <Slider AutomationProperties.Name="Громкость звуков для друзей" Minimum="0" Maximum="100" StepFrequency="1" IsThumbToolTipEnabled="False"
+                            <Slider AutomationProperties.Name="Громкость звуков для друзей" Minimum="0" Maximum="200" TickFrequency="100" TickPlacement="Outside" StepFrequency="1" IsThumbToolTipEnabled="False"
                                     Value="{x:Bind Vm.CableLevel, Mode=TwoWay}" />
                             <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="6">
                                 <TextBlock Text="Мой голос" FontSize="14" VerticalAlignment="Center" />
-                                <TextBlock Grid.Column="1" Text="{x:Bind Vm.MicText, Mode=OneWay}" Style="{StaticResource XSub}" VerticalAlignment="Center" />
+                                <TextBlock FontFamily="{StaticResource XFontMono}" Grid.Column="1" Text="{x:Bind Vm.MicText, Mode=OneWay}" Style="{StaticResource XSub}" VerticalAlignment="Center" />
                                 <ToggleButton Grid.Column="2" IsChecked="{x:Bind Vm.MicMuted, Mode=TwoWay}" AutomationProperties.Name="Выключить голос" Padding="6,2" MinHeight="0"
                                               CornerRadius="{Binding Chip, Source={StaticResource Shape}}" ToolTipService.ToolTip="Выключить голос (друзья слышат только звуки)">
                                     <FontIcon Glyph="&#xF781;" FontSize="12" />
                                 </ToggleButton>
                             </Grid>
-                            <Slider AutomationProperties.Name="Громкость голоса" Minimum="0" Maximum="100" StepFrequency="1" IsThumbToolTipEnabled="False"
+                            <Slider AutomationProperties.Name="Громкость голоса" Minimum="0" Maximum="200" TickFrequency="100" TickPlacement="Outside" StepFrequency="1" IsThumbToolTipEnabled="False"
                                     Value="{x:Bind Vm.MicLevel, Mode=TwoWay}" />
                         </StackPanel>
                     </Border>

@@ -18,6 +18,16 @@ public sealed class PeakHistory
 
     public int Capacity => ring.Length;
 
+    /// <summary>Сколько отрезков записано за всё время (для плавной прокрутки: изменилось — пришёл новый).</summary>
+    public long Written
+    {
+        get
+        {
+            lock (gate)
+                return written;
+        }
+    }
+
     /// <summary>Сколько отрезков записано (не больше ёмкости).</summary>
     public int Count
     {

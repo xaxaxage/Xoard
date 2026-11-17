@@ -18,16 +18,31 @@ on first start, see `src/Xoard.Core/Shell/LegacyMigration.cs`).
   family of their web apps (calorie and habit trackers), but **stricter, less soft**:
   - **Strict shape by default**: corners ~6 px, hairline borders instead of soft shadows, **sharp waveforms** (pointed
     polygons like an audio editor, not rounded bars). A "Мягкая" (soft, 18 px) shape is an option in settings.
-  - **Everything on one page** — no separate Record/Settings pages. Settings are a side sheet; trim is a dialog.
+  - **Everything on one page** — no separate Record/Settings pages. Clips open in an editor overlay
+    (`Views/ClipEditor`).
+  - **Settings: a centered window with numbered sections on the left** (01 Звук … 09 Claude Desktop), content on the
+    right, cable/update status at the bottom left (`Views/SettingsSheet`). The user picked it over a single long
+    page. Few-option settings are segments (L+R / L / R, Поверх / Заново), group labels are mono caps.
   - **Three layouts, chosen in settings**: Пульт (grid + right column), Док (big tiles + floating bottom bar),
     Лента (one column, list). All show a **live waveform of the last 30 s** (replay buffer) moving in the window.
   - **Palettes** from the trackers (Гавань, Матча, Ягода, Океан, Лаванда, Графит, Ночь, Эспрессо, OLED) plus two in
     the logo's colors (Xoard, Xoard ночь) and **Авто** (Xoard by day, Xoard ночь with dark Windows). Brushes are
-    changed in place (`Theme/ThemeManager.cs`), stock WinUI keys are mapped to palette brushes.
+    changed in place (`Theme/ThemeManager.cs`), stock WinUI keys are mapped to palette brushes. **Yellow Xoard is
+    the default**; configs saved with "auto" before config version 2 are moved to it once.
   - **Fonts**: Onest (text) + Geologica (titles, big numbers), bundled (OFL) — Cyrillic stand-ins for the trackers'
-    Figtree and Bricolage Grotesque, which have no Cyrillic.
-  - Humor line under the title (switch in settings), dark ink toast pill, quiet animations with an off switch.
+    Figtree and Bricolage Grotesque, which have no Cyrillic. JetBrains Mono (`XFontMono`) for numbers: times,
+    hotkeys, percentages, rulers.
+  - **Technical, but not to the max** (feedback round, Nov 2026): mono digits, tick marks, the live strip as an
+    audio-editor view (peak + RMS layers, scrolled every frame). Not a full DAW look.
+  - Dark ink toast pill, quiet animations with an off switch. **No humor anywhere** — the user asked to remove it.
   - Mockups: https://claude.ai/artifact/Q2XkUuqhup1KvAY6SFaxnw
+- **Volume 0–200 %**, 100 % = unity (default for all three). Curve: cube up to 100 %, square above (200 % ≈ +12 dB);
+  a −1 dBFS limiter keeps it from clipping.
+- **Clips go through an editor.** Recording and «Сохранить» (replay) from the window open `ClipEditor` with the
+  clip in memory: «Сохранить выделенное», «Сохранить целиком», «Выбросить», «Сбросить выделение». No file until the
+  user saves. Hotkeys (in a game) and MCP still save straight to a file. Trim uses the same editor.
+- **Sounds folder can be reassigned** in settings (move the files or just switch). `AppConfig.SoundsFolder`, null
+  means the default `Документы\Xoard\Sounds`.
 - **Push-to-talk** is postponed (the user said to skip it for now).
 - **Git.** Repo-local author `georg`; no AI co-author or session trailers, no model names in commits or code.
   Don't commit `app-playbook.skill`.

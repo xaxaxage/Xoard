@@ -45,13 +45,8 @@ public sealed partial class PaletteChoice : ObservableObject
 /// <summary>Вид: палитра, форма, раскладка, юмор, настройки, живая волна повтора.</summary>
 public sealed partial class MainViewModel
 {
-    private float[] liveRaw = [];
-
     /// <summary>Попросить окно выбрать файлы для добавления.</summary>
     public event Action? AddSoundsRequested;
-
-    /// <summary>Новые пики живой волны «последние N секунд» (0..1, новый — в конце), раз в 40 мс.</summary>
-    public event Action<float[]>? LiveWaveUpdated;
 
     public ObservableCollection<PaletteChoice> PaletteChoices { get; } = [];
 
@@ -60,9 +55,6 @@ public sealed partial class MainViewModel
 
     [ObservableProperty]
     public partial bool IsSoftShape { get; set; }
-
-    [ObservableProperty]
-    public partial bool HumorEnabled { get; set; } = true;
 
     [ObservableProperty]
     public partial bool SettingsOpen { get; set; }
@@ -87,8 +79,6 @@ public sealed partial class MainViewModel
         get => !IsSoftShape;
         set => IsSoftShape = !value;
     }
-
-    public string HumorLine => HumorLines.ForToday(HumorEnabled);
 
     /// <summary>Цвет точки состояния в шапке: всё хорошо / замечания / проблема.</summary>
     public Brush StatusDot => ThemeManager.Current.Brush(StatusSeverity switch
@@ -151,7 +141,6 @@ public sealed partial class MainViewModel
         PaletteId = config.Palette;
         IsSoftShape = config.Shape == "soft";
         LayoutId = config.Layout is "dock" or "stream" ? config.Layout : "pult";
-        HumorEnabled = config.HumorEnabled;
         suppressSettings = false;
 
         var windowsDark = ThemeManager.WindowsIsDark();
@@ -197,15 +186,6 @@ public sealed partial class MainViewModel
         ScheduleSave();
     }
 
-    partial void OnHumorEnabledChanged(bool value)
-    {
-        OnPropertyChanged(nameof(HumorLine));
-        if (suppressSettings)
-            return;
-        config = config with { HumorEnabled = value };
-        ScheduleSave();
-    }
-
     partial void OnStatusSeverityChanged(InfoBarSeverity value) => OnPropertyChanged(nameof(StatusDot));
 
     partial void OnLayoutIdChanged(string value)
@@ -242,6 +222,7 @@ public sealed partial class MainViewModel
     private void RaiseReplayTexts()
     {
         OnPropertyChanged(nameof(ReplayTitle));
+        OnPropertyChanged(nameof(ReplayDivisions));
         OnPropertyChanged(nameof(ReplayLengthText));
         OnPropertyChanged(nameof(ReplayStateText));
         OnPropertyChanged(nameof(ReplayTickFar));
@@ -252,32 +233,40 @@ public sealed partial class MainViewModel
         OnPropertyChanged(nameof(RecordHotkeyShort));
     }
 
-    /// <summary>
-    /// Живая волна: пики последних N секунд звука компьютера, по два отрезка в точку,
-    /// в шкале громкости (−54…0 дБ), чтобы и тихий звук был виден.
-    /// </summary>
-    private void UpdateLiveWave()
+    /// <summary>Живая волна повтора (последние N секунд звука компьютера) для элемента LiveWaveView.</summary>
+    public Controls.ILiveWaveSource LiveWave => liveFeed ??= new LiveFeed(this);
+
+    /// <summary>Деления на живой волне — каждые 5 секунд.</summary>
+    public int ReplayDivisions => Math.Max(1, (int)Math.Round(ReplaySeconds / 5));
+
+    private LiveFeed? liveFeed;
+
+    private sealed class LiveFeed(MainViewModel vm) : Controls.ILiveWaveSource
     {
-        var handler = LiveWaveUpdated;
-        if (handler is null)
-            return;
+        public long Written => vm.recorder.LiveBucketsWritten;
 
-        var buckets = (int)Math.Round(ReplaySeconds / RecordingService.LivePeakSeconds);
-        if (liveRaw.Length != buckets)
-            liveRaw = new float[buckets];
-        if (ReplayEnabled)
-            recorder.CopyLivePeaks(liveRaw);
-        else
-            Array.Clear(liveRaw);
+        public int Buckets => (int)Math.Round(vm.ReplaySeconds / RecordingService.LivePeakSeconds);
 
-        var points = new float[Math.Max(2, buckets / 2)];
-        for (var i = 0; i < points.Length; i++)
+        public double BucketSeconds => RecordingService.LivePeakSeconds;
+
+        public void Copy(float[] peaks, float[] rms)
         {
-            var v = Math.Max(liveRaw[Math.Min(liveRaw.Length - 1, 2 * i)], liveRaw[Math.Min(liveRaw.Length - 1, (2 * i) + 1)]);
-            var db = 20 * Math.Log10(Math.Max(v, 1e-5));
-            points[i] = (float)Math.Clamp((db + 54) / 54, 0, 1);
+            if (vm.ReplayEnabled)
+            {
+                vm.recorder.CopyLivePeaks(peaks);
+                vm.recorder.CopyLiveRms(rms);
+            }
+            else
+            {
+                Array.Clear(peaks);
+                Array.Clear(rms);
+            }
         }
 
-        handler(points);
+        public void Tick()
+        {
+            if (vm.ReplayEnabled)
+                vm.recorder.CatchUpSilence();
+        }
     }
 }

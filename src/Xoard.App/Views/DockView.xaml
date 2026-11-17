@@ -41,7 +41,6 @@
                         <Image Source="ms-appx:///Assets/Logo.png" Width="44" Height="44" AutomationProperties.AccessibilityView="Raw" />
                         <TextBlock Text="Xoard" FontFamily="{StaticResource XFontDisplay}" FontSize="32" FontWeight="ExtraBold" VerticalAlignment="Center" />
                     </StackPanel>
-                    <TextBlock Text="{x:Bind Vm.HumorLine, Mode=OneWay}" Style="{StaticResource XSub}" TextWrapping="NoWrap" TextTrimming="CharacterEllipsis" />
                 </StackPanel>
 
                 <Grid Grid.Column="1" Width="300" VerticalAlignment="Bottom">
@@ -69,15 +68,15 @@
                             <Ellipse Width="7" Height="7" Fill="{StaticResource XRecording}" VerticalAlignment="Center" Visibility="{x:Bind Vm.ReplayEnabled, Mode=OneWay}" />
                             <TextBlock Text="Повтор" Style="{StaticResource XCap}" />
                         </StackPanel>
-                        <TextBlock Text="{x:Bind Vm.ReplayLengthText, Mode=OneWay}" FontFamily="{StaticResource XFontDisplay}" FontSize="22" FontWeight="Bold" />
+                        <TextBlock Text="{x:Bind Vm.ReplayLengthText, Mode=OneWay}" FontFamily="{StaticResource XFontMono}" FontSize="22" FontWeight="Bold" />
                     </StackPanel>
                     <Grid Grid.Column="1" RowDefinitions="*,Auto" RowSpacing="4" AutomationProperties.Name="Волна последних секунд звука компьютера">
-                        <controls:WaveView x:Name="LiveWave" WaveBrush="{StaticResource XPrimary}" LineBrush="{StaticResource XWave}" />
+                        <controls:LiveWaveView Source="{x:Bind Vm.LiveWave}" Divisions="{x:Bind Vm.ReplayDivisions, Mode=OneWay}" PeakBrush="{StaticResource XWave}" RmsBrush="{StaticResource XPrimary}" LineBrush="{StaticResource XWave}" TickBrush="{StaticResource XLine}" />
                         <Rectangle Width="2" HorizontalAlignment="Right" Fill="{StaticResource XAccent}" Margin="0,-2,0,-2" />
                         <Grid Grid.Row="1" ColumnDefinitions="*,*,*,Auto">
-                            <TextBlock Text="{x:Bind Vm.ReplayTickFar, Mode=OneWay}" Style="{StaticResource XCap}" FontWeight="Normal" />
-                            <TextBlock Grid.Column="1" Text="{x:Bind Vm.ReplayTickMid, Mode=OneWay}" Style="{StaticResource XCap}" FontWeight="Normal" />
-                            <TextBlock Grid.Column="2" Text="{x:Bind Vm.ReplayTickNear, Mode=OneWay}" Style="{StaticResource XCap}" FontWeight="Normal" />
+                            <TextBlock FontFamily="{StaticResource XFontMono}" Text="{x:Bind Vm.ReplayTickFar, Mode=OneWay}" Style="{StaticResource XCap}" FontWeight="Normal" />
+                            <TextBlock FontFamily="{StaticResource XFontMono}" Grid.Column="1" Text="{x:Bind Vm.ReplayTickMid, Mode=OneWay}" Style="{StaticResource XCap}" FontWeight="Normal" />
+                            <TextBlock FontFamily="{StaticResource XFontMono}" Grid.Column="2" Text="{x:Bind Vm.ReplayTickNear, Mode=OneWay}" Style="{StaticResource XCap}" FontWeight="Normal" />
                             <TextBlock Grid.Column="3" Text="сейчас" Style="{StaticResource XCap}" Foreground="{StaticResource XInk}" />
                         </Grid>
                     </Grid>
@@ -159,14 +158,14 @@
                                     <TextBlock Text="{x:Bind Name, Mode=OneWay}" FontSize="16" FontWeight="SemiBold" TextWrapping="NoWrap" TextTrimming="CharacterEllipsis" />
                                     <Border Grid.Column="1" Padding="6,1" BorderBrush="{StaticResource XLine}" BorderThickness="1" VerticalAlignment="Top"
                                             CornerRadius="{Binding Chip, Source={StaticResource Shape}}" Visibility="{x:Bind HasHotkey, Mode=OneWay}">
-                                        <TextBlock Text="{x:Bind HotkeyText, Mode=OneWay}" Style="{StaticResource XCap}" TextTrimming="CharacterEllipsis" MaxWidth="110" />
+                                        <TextBlock FontFamily="{StaticResource XFontMono}" Text="{x:Bind HotkeyText, Mode=OneWay}" Style="{StaticResource XCap}" TextTrimming="CharacterEllipsis" MaxWidth="110" />
                                     </Border>
                                 </Grid>
                                 <controls:WaveView Grid.Row="1" Height="36" VerticalAlignment="Center" Peaks="{x:Bind Wave, Mode=OneWay}" Progress="{x:Bind Progress, Mode=OneWay}"
                                                    WaveBrush="{StaticResource XWave}" PlayedBrush="{StaticResource XPrimary}" />
                                 <StackPanel Grid.Row="2" Orientation="Horizontal" Spacing="6">
                                     <FontIcon Glyph="&#xE71A;" FontSize="12" Foreground="{StaticResource XPrimary}" Visibility="{x:Bind IsPlaying, Mode=OneWay}" />
-                                    <TextBlock Text="{x:Bind DurationText, Mode=OneWay}" Style="{StaticResource XSub}" TextWrapping="NoWrap" />
+                                    <TextBlock FontFamily="{StaticResource XFontMono}" Text="{x:Bind DurationText, Mode=OneWay}" Style="{StaticResource XSub}" TextWrapping="NoWrap" />
                                     <ProgressRing Width="14" Height="14" IsActive="{x:Bind IsLoading, Mode=OneWay}" />
                                     <FontIcon Glyph="&#xE7BA;" FontSize="14" Foreground="{StaticResource XAccent}" Visibility="{x:Bind HasError, Mode=OneWay}" />
                                 </StackPanel>
@@ -199,24 +198,24 @@
                     <Rectangle Width="1" Height="28" Fill="{StaticResource XLine}" Margin="4,0" />
                     <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center" ToolTipService.ToolTip="Мне в наушники">
                         <FontIcon Glyph="&#xE7F6;" FontSize="16" Foreground="{StaticResource XMuted}" />
-                        <Slider Width="90" Minimum="0" Maximum="100" StepFrequency="1" IsThumbToolTipEnabled="False" VerticalAlignment="Center"
+                        <Slider Width="90" Minimum="0" Maximum="200" TickFrequency="100" TickPlacement="Outside" StepFrequency="1" IsThumbToolTipEnabled="False" VerticalAlignment="Center"
                                 Value="{x:Bind Vm.HeadphonesLevel, Mode=TwoWay}" AutomationProperties.Name="Громкость в наушниках" />
-                        <TextBlock Text="{x:Bind Vm.HeadphonesText, Mode=OneWay}" Style="{StaticResource XCap}" Width="34" VerticalAlignment="Center" />
+                        <TextBlock FontFamily="{StaticResource XFontMono}" Text="{x:Bind Vm.HeadphonesText, Mode=OneWay}" Style="{StaticResource XCap}" Width="34" VerticalAlignment="Center" />
                     </StackPanel>
                     <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center" ToolTipService.ToolTip="Звуки друзьям">
                         <FontIcon Glyph="&#xE716;" FontSize="16" Foreground="{StaticResource XMuted}" />
-                        <Slider Width="90" Minimum="0" Maximum="100" StepFrequency="1" IsThumbToolTipEnabled="False" VerticalAlignment="Center"
+                        <Slider Width="90" Minimum="0" Maximum="200" TickFrequency="100" TickPlacement="Outside" StepFrequency="1" IsThumbToolTipEnabled="False" VerticalAlignment="Center"
                                 Value="{x:Bind Vm.CableLevel, Mode=TwoWay}" AutomationProperties.Name="Громкость звуков для друзей" />
-                        <TextBlock Text="{x:Bind Vm.CableText, Mode=OneWay}" Style="{StaticResource XCap}" Width="34" VerticalAlignment="Center" />
+                        <TextBlock FontFamily="{StaticResource XFontMono}" Text="{x:Bind Vm.CableText, Mode=OneWay}" Style="{StaticResource XCap}" Width="34" VerticalAlignment="Center" />
                     </StackPanel>
                     <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center" ToolTipService.ToolTip="Мой голос">
                         <ToggleButton IsChecked="{x:Bind Vm.MicMuted, Mode=TwoWay}" Padding="4" MinHeight="0" MinWidth="0" Background="Transparent" BorderThickness="0"
                                       CornerRadius="{Binding Chip, Source={StaticResource Shape}}" AutomationProperties.Name="Выключить голос" ToolTipService.ToolTip="Выключить голос">
                             <FontIcon Glyph="&#xE720;" FontSize="16" />
                         </ToggleButton>
-                        <Slider Width="90" Minimum="0" Maximum="100" StepFrequency="1" IsThumbToolTipEnabled="False" VerticalAlignment="Center"
+                        <Slider Width="90" Minimum="0" Maximum="200" TickFrequency="100" TickPlacement="Outside" StepFrequency="1" IsThumbToolTipEnabled="False" VerticalAlignment="Center"
                                 Value="{x:Bind Vm.MicLevel, Mode=TwoWay}" AutomationProperties.Name="Громкость голоса" />
-                        <TextBlock Text="{x:Bind Vm.MicText, Mode=OneWay}" Style="{StaticResource XCap}" Width="34" VerticalAlignment="Center" />
+                        <TextBlock FontFamily="{StaticResource XFontMono}" Text="{x:Bind Vm.MicText, Mode=OneWay}" Style="{StaticResource XCap}" Width="34" VerticalAlignment="Center" />
                     </StackPanel>
                     <Rectangle Width="1" Height="28" Fill="{StaticResource XLine}" Margin="4,0" />
                     <Button Style="{StaticResource XQuietButton}" Command="{x:Bind Vm.ToggleModeCommand}" Height="44" Foreground="{StaticResource XMuted}"
@@ -234,7 +233,7 @@
                         Visibility="{x:Bind Vm.IsRecording, Mode=OneWay}">
                     <StackPanel Orientation="Horizontal" Spacing="6">
                         <Ellipse Width="8" Height="8" Fill="{StaticResource XRecording}" VerticalAlignment="Center" />
-                        <TextBlock Text="{x:Bind Vm.RecordingTimeText, Mode=OneWay}" Foreground="{StaticResource XBg}" FontSize="14" FontWeight="SemiBold" />
+                        <TextBlock FontFamily="{StaticResource XFontMono}" Text="{x:Bind Vm.RecordingTimeText, Mode=OneWay}" Foreground="{StaticResource XBg}" FontSize="14" FontWeight="SemiBold" />
                     </StackPanel>
                 </Border>
                 <Button Style="{StaticResource XQuietButton}" Command="{x:Bind Vm.ToggleRecordSourceCommand}" Height="22" MinHeight="0" Padding="4,0" HorizontalAlignment="Center"

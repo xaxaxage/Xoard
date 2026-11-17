@@ -151,6 +151,22 @@ public static class AudioClips
         }
     }
 
+    /// <summary>Стерео любой частоты → 48 кГц (без копирования, если уже 48 кГц).</summary>
+    public static float[] ToInternalRate(float[] stereo, int sampleRate) =>
+        sampleRate == AudioFormat.SampleRate ? stereo : Resample(stereo, sampleRate);
+
+    /// <summary>Свободное имя WAV в папке: «Имя.wav», занято — «Имя (2).wav»; запрещённые символы — «-».</summary>
+    public static string UniqueWavPath(string folder, string name)
+    {
+        Directory.CreateDirectory(folder);
+        foreach (var c in Path.GetInvalidFileNameChars())
+            name = name.Replace(c, '-');
+        var candidate = Path.Combine(folder, name + ".wav");
+        for (var i = 2; File.Exists(candidate); i++)
+            candidate = Path.Combine(folder, $"{name} ({i}).wav");
+        return candidate;
+    }
+
     private static float[] Resample(float[] stereo, int sampleRate)
     {
         var source = new FloatArrayProvider(stereo, sampleRate);

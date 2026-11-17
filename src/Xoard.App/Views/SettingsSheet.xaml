@@ -3,311 +3,727 @@
     x:Class="Xoard.App.Views.SettingsSheet"
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:local="using:Xoard.App.Views"
     xmlns:vm="using:Xoard.App.ViewModels"
     FontFamily="{StaticResource XFontText}"
     Foreground="{StaticResource XInk}">
 
-    <Grid Background="{StaticResource XBg}" BorderBrush="{StaticResource XLine}" BorderThickness="1,0,0,0" RowDefinitions="Auto,*">
-        <Grid Padding="22,16,14,8" ColumnDefinitions="*,Auto">
-            <TextBlock Text="Настройки" Style="{StaticResource XTitle}" VerticalAlignment="Center" />
-            <Button Grid.Column="1" Style="{StaticResource XIconButton}" Command="{x:Bind Vm.CloseSettingsCommand}"
-                    CornerRadius="{Binding Control, Source={StaticResource Shape}}" AutomationProperties.Name="Закрыть настройки" ToolTipService.ToolTip="Закрыть (Esc)">
-                <FontIcon Glyph="&#xE711;" FontSize="16" />
-            </Button>
-        </Grid>
+    <UserControl.Resources>
+        <!-- Пункт раздела слева: выбранный — тёмная плашка с жёлтым текстом -->
+        <Style x:Key="NavItem" TargetType="RadioButton">
+            <Setter Property="Foreground" Value="{StaticResource XInk}" />
+            <Setter Property="FontSize" Value="14" />
+            <Setter Property="MinHeight" Value="36" />
+            <Setter Property="HorizontalAlignment" Value="Stretch" />
+            <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+            <Setter Property="UseSystemFocusVisuals" Value="True" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="RadioButton">
+                        <Grid Background="Transparent" CornerRadius="{TemplateBinding CornerRadius}">
+                            <Border x:Name="Hover" Background="{StaticResource XSunken}" Opacity="0" CornerRadius="{TemplateBinding CornerRadius}" />
+                            <Border x:Name="Selected" Background="{StaticResource XPrimary}" Opacity="0" CornerRadius="{TemplateBinding CornerRadius}" />
+                            <ContentPresenter x:Name="Content" Content="{TemplateBinding Content}" Foreground="{TemplateBinding Foreground}"
+                                              HorizontalContentAlignment="Stretch" VerticalAlignment="Center" Padding="10,0" />
+                            <VisualStateManager.VisualStateGroups>
+                                <VisualStateGroup x:Name="CheckStates">
+                                    <VisualState x:Name="Checked">
+                                        <VisualState.Setters>
+                                            <Setter Target="Selected.Opacity" Value="1" />
+                                            <Setter Target="Content.Foreground" Value="{StaticResource XOnPrimary}" />
+                                        </VisualState.Setters>
+                                    </VisualState>
+                                    <VisualState x:Name="Unchecked" />
+                                    <VisualState x:Name="Indeterminate" />
+                                </VisualStateGroup>
+                                <VisualStateGroup x:Name="CommonStates">
+                                    <VisualState x:Name="Normal" />
+                                    <VisualState x:Name="PointerOver">
+                                        <VisualState.Setters>
+                                            <Setter Target="Hover.Opacity" Value="1" />
+                                        </VisualState.Setters>
+                                    </VisualState>
+                                    <VisualState x:Name="Pressed">
+                                        <VisualState.Setters>
+                                            <Setter Target="Hover.Opacity" Value="1" />
+                                        </VisualState.Setters>
+                                    </VisualState>
+                                    <VisualState x:Name="Disabled" />
+                                </VisualStateGroup>
+                            </VisualStateManager.VisualStateGroups>
+                        </Grid>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
 
-        <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
-            <StackPanel Padding="22,4,22,24" Spacing="16">
+        <!-- Моноширинные подписи групп: «УСТРОЙСТВА», «ОБЩИЕ» -->
+        <Style x:Key="MonoCap" TargetType="TextBlock">
+            <Setter Property="FontFamily" Value="{StaticResource XFontMono}" />
+            <Setter Property="FontSize" Value="11" />
+            <Setter Property="CharacterSpacing" Value="80" />
+            <Setter Property="Foreground" Value="{StaticResource XMuted}" />
+        </Style>
+        <Style x:Key="NavNumber" TargetType="TextBlock">
+            <Setter Property="FontFamily" Value="{StaticResource XFontMono}" />
+            <Setter Property="FontSize" Value="11" />
+            <Setter Property="Opacity" Value="0.6" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+        </Style>
 
-                <!-- Раскладка -->
-                <StackPanel Spacing="8">
-                    <TextBlock Text="Раскладка" Style="{StaticResource XCap}" FontSize="14" />
-                    <Grid ColumnDefinitions="*,*,*" ColumnSpacing="10">
-                        <Button Style="{StaticResource XButton}" Padding="0" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch" VerticalAlignment="Top"
-                                Command="{x:Bind Vm.PickLayoutCommand}" CommandParameter="pult" AutomationProperties.Name="Раскладка «Пульт»">
-                        <StackPanel Spacing="6">
-                            <Grid>
-                            <Border Height="64" Padding="7" Background="{StaticResource XSurface}" BorderBrush="{StaticResource XLine}" BorderThickness="1"
-                                    CornerRadius="{Binding Control, Source={StaticResource Shape}}">
-                                <Grid ColumnDefinitions="2*,*" RowDefinitions="10,*" ColumnSpacing="4" RowSpacing="4">
-                                    <Border Grid.ColumnSpan="2" Background="{StaticResource XPrimary}" CornerRadius="2" />
-                                    <Grid Grid.Row="1" ColumnDefinitions="*,*,*" RowDefinitions="*,*" ColumnSpacing="3" RowSpacing="3">
-                                        <Border Background="{StaticResource XWave}" CornerRadius="2" />
-                                        <Border Grid.Column="1" Background="{StaticResource XWave}" CornerRadius="2" />
-                                        <Border Grid.Column="2" Background="{StaticResource XWave}" CornerRadius="2" />
-                                        <Border Grid.Row="1" Background="{StaticResource XWave}" CornerRadius="2" />
-                                        <Border Grid.Row="1" Grid.Column="1" Background="{StaticResource XWave}" CornerRadius="2" />
-                                        <Border Grid.Row="1" Grid.Column="2" Background="{StaticResource XWave}" CornerRadius="2" />
-                                    </Grid>
-                                    <Grid Grid.Row="1" Grid.Column="1" RowDefinitions="*,*" RowSpacing="3">
-                                        <Border Background="{StaticResource XTrack}" CornerRadius="2" />
-                                        <Border Grid.Row="1" Background="{StaticResource XTrack}" CornerRadius="2" />
-                                    </Grid>
-                                </Grid>
-                            </Border>
-                            <Border BorderBrush="{StaticResource XPrimary}" BorderThickness="2" CornerRadius="{Binding Control, Source={StaticResource Shape}}"
-                                    Visibility="{x:Bind Vm.IsLayoutPult, Mode=OneWay}" />
-                            </Grid>
-                            <TextBlock Text="Пульт" Style="{StaticResource XCap}" />
-                        </StackPanel>
-                        </Button>
-                        <Button Grid.Column="1" Style="{StaticResource XButton}" Padding="0" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch" VerticalAlignment="Top"
-                                Command="{x:Bind Vm.PickLayoutCommand}" CommandParameter="dock" AutomationProperties.Name="Раскладка «Док»">
-                        <StackPanel Spacing="6">
-                            <Grid>
-                            <Border Height="64" Padding="7" Background="{StaticResource XSurface}" BorderBrush="{StaticResource XLine}" BorderThickness="1"
-                                    CornerRadius="{Binding Control, Source={StaticResource Shape}}">
-                                <Grid RowDefinitions="8,*,9" RowSpacing="4">
-                                    <Border Background="{StaticResource XPrimary}" CornerRadius="2" />
-                                    <Grid Grid.Row="1" ColumnDefinitions="*,*,*,*" ColumnSpacing="3">
-                                        <Border Background="{StaticResource XWave}" CornerRadius="2" />
-                                        <Border Grid.Column="1" Background="{StaticResource XWave}" CornerRadius="2" />
-                                        <Border Grid.Column="2" Background="{StaticResource XWave}" CornerRadius="2" />
-                                        <Border Grid.Column="3" Background="{StaticResource XWave}" CornerRadius="2" />
-                                    </Grid>
-                                    <Border Grid.Row="2" Width="44" Background="{StaticResource XTrack}" CornerRadius="2" />
-                                </Grid>
-                            </Border>
-                            <Border BorderBrush="{StaticResource XPrimary}" BorderThickness="2" CornerRadius="{Binding Control, Source={StaticResource Shape}}"
-                                    Visibility="{x:Bind Vm.IsLayoutDock, Mode=OneWay}" />
-                            </Grid>
-                            <TextBlock Text="Док" Style="{StaticResource XCap}" />
-                        </StackPanel>
-                        </Button>
-                        <Button Grid.Column="2" Style="{StaticResource XButton}" Padding="0" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch" VerticalAlignment="Top"
-                                Command="{x:Bind Vm.PickLayoutCommand}" CommandParameter="stream" AutomationProperties.Name="Раскладка «Лента»">
-                        <StackPanel Spacing="6">
-                            <Grid>
-                            <Border Height="64" Padding="7" Background="{StaticResource XSurface}" BorderBrush="{StaticResource XLine}" BorderThickness="1"
-                                    CornerRadius="{Binding Control, Source={StaticResource Shape}}">
-                                <StackPanel Width="56" Spacing="3">
-                                    <Border Height="14" Background="{StaticResource XPrimary}" CornerRadius="2" />
-                                    <Border Height="6" Background="{StaticResource XWave}" CornerRadius="2" />
-                                    <Border Height="6" Background="{StaticResource XWave}" CornerRadius="2" />
-                                    <Border Height="6" Background="{StaticResource XWave}" CornerRadius="2" />
-                                    <Border Height="7" Width="36" Background="{StaticResource XTrack}" CornerRadius="2" />
-                                </StackPanel>
-                            </Border>
-                            <Border BorderBrush="{StaticResource XPrimary}" BorderThickness="2" CornerRadius="{Binding Control, Source={StaticResource Shape}}"
-                                    Visibility="{x:Bind Vm.IsLayoutStream, Mode=OneWay}" />
-                            </Grid>
-                            <TextBlock Text="Лента" Style="{StaticResource XCap}" />
-                        </StackPanel>
-                        </Button>
-                    </Grid>
-                </StackPanel>
+        <!-- Строка карточки: подпись слева, управление справа, тонкая линия сверху -->
+        <Style x:Key="Row" TargetType="Grid">
+            <Setter Property="Padding" Value="14,9" />
+            <Setter Property="MinHeight" Value="54" />
+            <Setter Property="ColumnSpacing" Value="16" />
+            <Setter Property="BorderBrush" Value="{StaticResource XLine}" />
+            <Setter Property="BorderThickness" Value="0,1,0,0" />
+        </Style>
+        <Style x:Key="FirstRow" TargetType="Grid" BasedOn="{StaticResource Row}">
+            <Setter Property="BorderThickness" Value="0" />
+        </Style>
+        <Style x:Key="RowTitle" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="15" />
+            <Setter Property="TextWrapping" Value="Wrap" />
+        </Style>
+        <Style x:Key="RowHint" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="12" />
+            <Setter Property="Foreground" Value="{StaticResource XMuted}" />
+            <Setter Property="TextWrapping" Value="Wrap" />
+        </Style>
+        <Style x:Key="MonoValue" TargetType="TextBlock">
+            <Setter Property="FontFamily" Value="{StaticResource XFontMono}" />
+            <Setter Property="FontSize" Value="13" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+        </Style>
 
-                <!-- Форма -->
-                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
-                    <TextBlock Text="Форма" Style="{StaticResource XCap}" FontSize="14" VerticalAlignment="Center" />
-                    <Grid Grid.Column="1" Width="240" ColumnDefinitions="*,*" Padding="3" Background="{StaticResource XSunken}"
-                          CornerRadius="{Binding Control, Source={StaticResource Shape}}">
-                        <RadioButton Style="{StaticResource XSegment}" GroupName="Shape" Content="Строгая" IsChecked="{x:Bind Vm.IsStrictShape, Mode=TwoWay}"
-                                     CornerRadius="{Binding Inner, Source={StaticResource Shape}}" />
-                        <RadioButton Grid.Column="1" Style="{StaticResource XSegment}" GroupName="Shape" Content="Мягкая" IsChecked="{x:Bind Vm.IsSoftShape, Mode=TwoWay}"
-                                     CornerRadius="{Binding Inner, Source={StaticResource Shape}}" />
-                    </Grid>
+        <!-- Кнопки в строках -->
+        <Style x:Key="RowPrimary" TargetType="Button" BasedOn="{StaticResource XPrimaryButton}">
+            <Setter Property="MinHeight" Value="36" />
+            <Setter Property="FontSize" Value="14" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="Padding" Value="14,0" />
+        </Style>
+        <Style x:Key="RowOutline" TargetType="Button" BasedOn="{StaticResource XButton}">
+            <Setter Property="Foreground" Value="{StaticResource XInk}" />
+            <Setter Property="BorderBrush" Value="{StaticResource XLine}" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="Padding" Value="14,0" />
+        </Style>
+        <Style x:Key="RowSegment" TargetType="RadioButton" BasedOn="{StaticResource XSegment}">
+            <Setter Property="MinHeight" Value="30" />
+            <Setter Property="FontSize" Value="13" />
+        </Style>
+
+        <!-- Сочетание клавиш колпачками: [Ctrl] [Alt] [S] -->
+        <DataTemplate x:Key="KeyCap" x:DataType="x:String">
+            <Border Height="24" MinWidth="24" Padding="7,0" Background="{StaticResource XBg}" BorderBrush="{StaticResource XLine}" BorderThickness="1,1,1,2"
+                    CornerRadius="{Binding Chip, Source={StaticResource Shape}}">
+                <TextBlock Text="{x:Bind}" FontFamily="{StaticResource XFontMono}" FontSize="12" HorizontalAlignment="Center" VerticalAlignment="Center" />
+            </Border>
+        </DataTemplate>
+        <ItemsPanelTemplate x:Key="KeyRow">
+            <StackPanel Orientation="Horizontal" Spacing="4" />
+        </ItemsPanelTemplate>
+    </UserControl.Resources>
+
+    <Border Background="{StaticResource XBg}" BorderBrush="{StaticResource XLine}" BorderThickness="1"
+            CornerRadius="{Binding Sheet, Source={StaticResource Shape}}">
+        <Grid ColumnDefinitions="236,*">
+
+            <!-- ═══ Разделы слева ═══ -->
+            <Border Background="{StaticResource XSurface}" BorderBrush="{StaticResource XLine}" BorderThickness="0,0,1,0"
+                    CornerRadius="{Binding SheetStart, Source={StaticResource Shape}}">
+                <Grid RowDefinitions="Auto,*,Auto" RowSpacing="14" Padding="12,18,12,12">
+                    <StackPanel Padding="10,0" Spacing="2">
+                        <TextBlock Text="Настройки" Style="{StaticResource XTitle}" FontSize="20" />
+                        <TextBlock Text="{x:Bind local:SettingsSheet.VersionCap(Vm.AppVersion)}" Style="{StaticResource MonoCap}" />
+                    </StackPanel>
+
+                    <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
+                        <StackPanel Spacing="2" AutomationProperties.Name="Разделы настроек">
+                            <RadioButton x:Name="NavSound" Style="{StaticResource NavItem}" GroupName="SettingsNav" Tag="sound" Checked="OnNavChecked" IsChecked="True"
+                                         CornerRadius="{Binding Control, Source={StaticResource Shape}}" AutomationProperties.Name="Звук и устройства">
+                                <Grid ColumnDefinitions="26,*"><TextBlock Text="01" Style="{StaticResource NavNumber}" /><TextBlock Grid.Column="1" Text="Звук и устройства" /></Grid>
+                            </RadioButton>
+                            <RadioButton x:Name="NavKeys" Style="{StaticResource NavItem}" GroupName="SettingsNav" Tag="keys" Checked="OnNavChecked"
+                                         CornerRadius="{Binding Control, Source={StaticResource Shape}}" AutomationProperties.Name="Горячие клавиши">
+                                <Grid ColumnDefinitions="26,*"><TextBlock Text="02" Style="{StaticResource NavNumber}" /><TextBlock Grid.Column="1" Text="Горячие клавиши" /></Grid>
+                            </RadioButton>
+                            <RadioButton x:Name="NavRecord" Style="{StaticResource NavItem}" GroupName="SettingsNav" Tag="record" Checked="OnNavChecked"
+                                         CornerRadius="{Binding Control, Source={StaticResource Shape}}" AutomationProperties.Name="Запись и повтор">
+                                <Grid ColumnDefinitions="26,*"><TextBlock Text="03" Style="{StaticResource NavNumber}" /><TextBlock Grid.Column="1" Text="Запись и повтор" /></Grid>
+                            </RadioButton>
+                            <RadioButton x:Name="NavLook" Style="{StaticResource NavItem}" GroupName="SettingsNav" Tag="look" Checked="OnNavChecked"
+                                         CornerRadius="{Binding Control, Source={StaticResource Shape}}" AutomationProperties.Name="Вид">
+                                <Grid ColumnDefinitions="26,*"><TextBlock Text="04" Style="{StaticResource NavNumber}" /><TextBlock Grid.Column="1" Text="Вид" /></Grid>
+                            </RadioButton>
+                            <RadioButton x:Name="NavFolder" Style="{StaticResource NavItem}" GroupName="SettingsNav" Tag="folder" Checked="OnNavChecked"
+                                         CornerRadius="{Binding Control, Source={StaticResource Shape}}" AutomationProperties.Name="Папка звуков">
+                                <Grid ColumnDefinitions="26,*"><TextBlock Text="05" Style="{StaticResource NavNumber}" /><TextBlock Grid.Column="1" Text="Папка звуков" /></Grid>
+                            </RadioButton>
+                            <RadioButton x:Name="NavCable" Style="{StaticResource NavItem}" GroupName="SettingsNav" Tag="cable" Checked="OnNavChecked"
+                                         CornerRadius="{Binding Control, Source={StaticResource Shape}}" AutomationProperties.Name="VB-CABLE и Discord">
+                                <Grid ColumnDefinitions="26,*"><TextBlock Text="06" Style="{StaticResource NavNumber}" /><TextBlock Grid.Column="1" Text="VB-CABLE и Discord" /></Grid>
+                            </RadioButton>
+                            <RadioButton x:Name="NavStartup" Style="{StaticResource NavItem}" GroupName="SettingsNav" Tag="startup" Checked="OnNavChecked"
+                                         CornerRadius="{Binding Control, Source={StaticResource Shape}}" AutomationProperties.Name="Запуск и трей">
+                                <Grid ColumnDefinitions="26,*"><TextBlock Text="07" Style="{StaticResource NavNumber}" /><TextBlock Grid.Column="1" Text="Запуск и трей" /></Grid>
+                            </RadioButton>
+                            <RadioButton x:Name="NavUpdates" Style="{StaticResource NavItem}" GroupName="SettingsNav" Tag="updates" Checked="OnNavChecked"
+                                         CornerRadius="{Binding Control, Source={StaticResource Shape}}" AutomationProperties.Name="Обновления">
+                                <Grid ColumnDefinitions="26,*"><TextBlock Text="08" Style="{StaticResource NavNumber}" /><TextBlock Grid.Column="1" Text="Обновления" /></Grid>
+                            </RadioButton>
+                            <RadioButton x:Name="NavClaude" Style="{StaticResource NavItem}" GroupName="SettingsNav" Tag="claude" Checked="OnNavChecked"
+                                         CornerRadius="{Binding Control, Source={StaticResource Shape}}" AutomationProperties.Name="Claude Desktop">
+                                <Grid ColumnDefinitions="26,*"><TextBlock Text="09" Style="{StaticResource NavNumber}" /><TextBlock Grid.Column="1" Text="Claude Desktop" /></Grid>
+                            </RadioButton>
+                        </StackPanel>
+                    </ScrollViewer>
+
+                    <!-- Состояние: кабель и новая версия -->
+                    <Border Grid.Row="2" Padding="12,10" BorderBrush="{StaticResource XLine}" BorderThickness="1"
+                            CornerRadius="{Binding Control, Source={StaticResource Shape}}">
+                        <StackPanel Spacing="7">
+                            <StackPanel Orientation="Horizontal" Spacing="8">
+                                <Rectangle Width="6" Height="6" VerticalAlignment="Center" Fill="{x:Bind local:SettingsSheet.CableDot(Vm.VbCableMissing), Mode=OneWay}" />
+                                <TextBlock Text="{x:Bind local:SettingsSheet.CableStatus(Vm.VbCableMissing), Mode=OneWay}" Style="{StaticResource MonoCap}" Foreground="{StaticResource XInk}" />
+                            </StackPanel>
+                            <StackPanel Orientation="Horizontal" Spacing="8" Visibility="{x:Bind Vm.UpdateAvailable, Mode=OneWay}">
+                                <Rectangle Width="6" Height="6" VerticalAlignment="Center" Fill="{StaticResource XAccent}" Stroke="{StaticResource XInk}" StrokeThickness="0.5" />
+                                <TextBlock Text="{x:Bind local:SettingsSheet.UpdateCap(Vm.UpdateVersion), Mode=OneWay}" Style="{StaticResource MonoCap}" Foreground="{StaticResource XInk}" />
+                            </StackPanel>
+                        </StackPanel>
+                    </Border>
+                </Grid>
+            </Border>
+
+            <!-- ═══ Содержимое раздела ═══ -->
+            <Grid Grid.Column="1" RowDefinitions="Auto,*">
+                <Grid Padding="26,20,18,14" ColumnDefinitions="*,Auto" ColumnSpacing="12">
+                    <StackPanel Spacing="3">
+                        <TextBlock x:Name="PageTitle" Style="{StaticResource XTitle}" Text="Звук и устройства" />
+                        <TextBlock x:Name="PageSubtitle" Style="{StaticResource XSub}" FontSize="13" Text="Куда идут звуки и ваш голос" />
+                    </StackPanel>
+                    <Button Grid.Column="1" Style="{StaticResource XIconButton}" Width="36" Height="36" VerticalAlignment="Top" BorderBrush="{StaticResource XLine}" BorderThickness="1"
+                            Command="{x:Bind Vm.CloseSettingsCommand}" CornerRadius="{Binding Control, Source={StaticResource Shape}}"
+                            AutomationProperties.Name="Закрыть настройки" ToolTipService.ToolTip="Закрыть (Esc)">
+                        <FontIcon Glyph="&#xE711;" FontSize="13" />
+                    </Button>
                 </Grid>
 
-                <!-- Палитра -->
-                <StackPanel Spacing="8">
-                    <TextBlock Text="Палитра" Style="{StaticResource XCap}" FontSize="14" />
-                    <ItemsControl ItemsSource="{x:Bind Vm.PaletteChoices}">
-                        <ItemsControl.ItemsPanel>
-                            <ItemsPanelTemplate>
-                                <ItemsWrapGrid Orientation="Horizontal" MaximumRowsOrColumns="4" ItemWidth="104" ItemHeight="78" />
-                            </ItemsPanelTemplate>
-                        </ItemsControl.ItemsPanel>
-                        <ItemsControl.ItemTemplate>
-                            <DataTemplate x:DataType="vm:PaletteChoice">
-                                <Button Style="{StaticResource XButton}" Command="{x:Bind PickCommand}" Padding="0" Width="94" HorizontalContentAlignment="Stretch"
-                                        VerticalAlignment="Top" AutomationProperties.Name="{x:Bind Name}">
-                                    <StackPanel Spacing="5">
-                                        <Grid Height="46" Background="{x:Bind Bg}" CornerRadius="{Binding Control, Source={StaticResource Shape}}">
-                                            <StackPanel VerticalAlignment="Center" Margin="9,0" Spacing="5">
-                                                <Border Height="14" Background="{x:Bind Card}" CornerRadius="2" BorderBrush="#40808080" BorderThickness="1" />
-                                                <StackPanel Orientation="Horizontal" Spacing="4">
-                                                    <Border Width="20" Height="6" Background="{x:Bind Main}" CornerRadius="1" />
-                                                    <Border Width="6" Height="6" Background="{x:Bind Accent}" CornerRadius="1" />
-                                                </StackPanel>
+                <ScrollViewer x:Name="PageScroll" Grid.Row="1" VerticalScrollBarVisibility="Auto">
+                    <Grid Padding="26,0,26,24">
+
+                        <!-- 01 · Звук и устройства -->
+                        <StackPanel x:Name="PageSound" Spacing="18">
+                            <StackPanel Spacing="8">
+                                <TextBlock Text="УСТРОЙСТВА" Style="{StaticResource MonoCap}" />
+                                <Border Background="{StaticResource XSurface}" BorderBrush="{StaticResource XLine}" BorderThickness="{Binding CardBorder, Source={StaticResource Shape}}"
+                                        CornerRadius="{Binding Card, Source={StaticResource Shape}}">
+                                    <StackPanel>
+                                        <Grid Style="{StaticResource FirstRow}" ColumnDefinitions="*,Auto">
+                                            <StackPanel VerticalAlignment="Center" Spacing="2">
+                                                <TextBlock Text="Наушники" Style="{StaticResource RowTitle}" />
+                                                <TextBlock Text="Только звуки — вы слышите то же, что друзья" Style="{StaticResource RowHint}" />
                                             </StackPanel>
-                                            <Border BorderBrush="{StaticResource XLine}" BorderThickness="1" CornerRadius="{Binding Control, Source={StaticResource Shape}}" />
-                                            <Border BorderBrush="{StaticResource XPrimary}" BorderThickness="2" CornerRadius="{Binding Control, Source={StaticResource Shape}}"
-                                                    Visibility="{x:Bind IsSelected, Mode=OneWay}" />
+                                            <ComboBox Grid.Column="1" Width="280" VerticalAlignment="Center" ItemsSource="{x:Bind Vm.HeadphoneOptions}"
+                                                      SelectedIndex="{x:Bind Vm.HeadphonesIndex, Mode=TwoWay}" DisplayMemberPath="Label" AutomationProperties.Name="Наушники" />
                                         </Grid>
-                                        <TextBlock Text="{x:Bind Name}" Style="{StaticResource XCap}" TextTrimming="CharacterEllipsis" />
+                                        <Grid Style="{StaticResource Row}" ColumnDefinitions="*,Auto">
+                                            <StackPanel VerticalAlignment="Center" Spacing="2">
+                                                <TextBlock Text="Микрофон" Style="{StaticResource RowTitle}" />
+                                                <TextBlock Text="Голос уходит в кабель вместе со звуками" Style="{StaticResource RowHint}" />
+                                            </StackPanel>
+                                            <ComboBox Grid.Column="1" Width="280" VerticalAlignment="Center" ItemsSource="{x:Bind Vm.MicOptions}"
+                                                      SelectedIndex="{x:Bind Vm.MicIndex, Mode=TwoWay}" DisplayMemberPath="Label" AutomationProperties.Name="Микрофон" />
+                                        </Grid>
+                                        <Grid Style="{StaticResource Row}" ColumnDefinitions="*,Auto">
+                                            <StackPanel VerticalAlignment="Center" Spacing="2">
+                                                <TextBlock Text="Передавать мой голос" Style="{StaticResource RowTitle}" />
+                                                <TextBlock Text="Выключите — друзья услышат только звуки" Style="{StaticResource RowHint}" />
+                                            </StackPanel>
+                                            <ToggleSwitch Grid.Column="1" IsOn="{x:Bind Vm.PassthroughEnabled, Mode=TwoWay}" OnContent="" OffContent="" MinWidth="0"
+                                                          VerticalAlignment="Center" AutomationProperties.Name="Передавать мой голос" />
+                                        </Grid>
+                                        <Grid Style="{StaticResource Row}" ColumnDefinitions="*,Auto">
+                                            <StackPanel VerticalAlignment="Center" Spacing="2">
+                                                <TextBlock Text="Канал микрофона" Style="{StaticResource RowTitle}" />
+                                                <TextBlock Text="Для микрофонов, которые пишут только в один канал" Style="{StaticResource RowHint}" />
+                                            </StackPanel>
+                                            <Grid Grid.Column="1" ColumnDefinitions="Auto,Auto,Auto" Padding="3" VerticalAlignment="Center" Background="{StaticResource XSunken}"
+                                                  CornerRadius="{Binding Control, Source={StaticResource Shape}}">
+                                                <RadioButton x:Name="ChannelBoth" Style="{StaticResource RowSegment}" GroupName="MicChannel" Tag="0" Content="L+R" FontFamily="{StaticResource XFontMono}"
+                                                             Checked="OnChannelChecked" CornerRadius="{Binding Inner, Source={StaticResource Shape}}" AutomationProperties.Name="Среднее левого и правого" />
+                                                <RadioButton x:Name="ChannelLeft" Grid.Column="1" Style="{StaticResource RowSegment}" GroupName="MicChannel" Tag="1" Content="L" FontFamily="{StaticResource XFontMono}"
+                                                             Checked="OnChannelChecked" CornerRadius="{Binding Inner, Source={StaticResource Shape}}" AutomationProperties.Name="Только левый" />
+                                                <RadioButton x:Name="ChannelRight" Grid.Column="2" Style="{StaticResource RowSegment}" GroupName="MicChannel" Tag="2" Content="R" FontFamily="{StaticResource XFontMono}"
+                                                             Checked="OnChannelChecked" CornerRadius="{Binding Inner, Source={StaticResource Shape}}" AutomationProperties.Name="Только правый" />
+                                            </Grid>
+                                        </Grid>
                                     </StackPanel>
-                                </Button>
-                            </DataTemplate>
-                        </ItemsControl.ItemTemplate>
-                    </ItemsControl>
-                </StackPanel>
+                                </Border>
+                            </StackPanel>
 
-                <!-- Анимации и юмор -->
-                <Border Background="{StaticResource XSurface}" BorderBrush="{StaticResource XLine}" BorderThickness="{Binding CardBorder, Source={StaticResource Shape}}"
-                        CornerRadius="{Binding Card, Source={StaticResource Shape}}">
-                    <StackPanel>
-                        <Grid Padding="14,8" ColumnDefinitions="*,Auto">
-                            <StackPanel VerticalAlignment="Center" Spacing="2">
-                                <TextBlock Text="Анимации" FontSize="16" />
-                                <TextBlock Text="Выключаются и вместе с анимациями Windows" Style="{StaticResource XCap}" FontWeight="Normal" />
-                            </StackPanel>
-                            <ToggleSwitch Grid.Column="1" IsOn="{x:Bind Vm.AnimationsEnabled, Mode=TwoWay}" OnContent="" OffContent="" MinWidth="0" AutomationProperties.Name="Анимации" />
-                        </Grid>
-                        <Rectangle Height="1" Fill="{StaticResource XLine}" />
-                        <Grid Padding="14,8" ColumnDefinitions="*,Auto">
-                            <StackPanel VerticalAlignment="Center" Spacing="2">
-                                <TextBlock Text="Юмор" FontSize="16" />
-                                <TextBlock Text="Шутки под заголовком" Style="{StaticResource XCap}" FontWeight="Normal" />
-                            </StackPanel>
-                            <ToggleSwitch Grid.Column="1" IsOn="{x:Bind Vm.HumorEnabled, Mode=TwoWay}" OnContent="" OffContent="" MinWidth="0" AutomationProperties.Name="Юмор" />
-                        </Grid>
-                    </StackPanel>
-                </Border>
-
-                <!-- Разделы, которые раскрываются на месте -->
-                <StackPanel Spacing="8">
-                    <Expander Header="Звук и устройства" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch">
-                        <StackPanel Spacing="12">
-                            <StackPanel Spacing="4">
-                                <TextBlock Text="Наушники (только звуки)" Style="{StaticResource XCap}" />
-                                <ComboBox HorizontalAlignment="Stretch" ItemsSource="{x:Bind Vm.HeadphoneOptions}" SelectedIndex="{x:Bind Vm.HeadphonesIndex, Mode=TwoWay}" DisplayMemberPath="Label" AutomationProperties.Name="Наушники" />
-                            </StackPanel>
-                            <StackPanel Spacing="4">
-                                <TextBlock Text="Микрофон" Style="{StaticResource XCap}" />
-                                <ComboBox HorizontalAlignment="Stretch" ItemsSource="{x:Bind Vm.MicOptions}" SelectedIndex="{x:Bind Vm.MicIndex, Mode=TwoWay}" DisplayMemberPath="Label" AutomationProperties.Name="Микрофон" />
-                            </StackPanel>
-                            <ToggleSwitch Header="Передавать мой голос" IsOn="{x:Bind Vm.PassthroughEnabled, Mode=TwoWay}" OnContent="Да — друзья слышат меня и звуки" OffContent="Нет — только звуки" />
-                            <StackPanel Spacing="4">
-                                <TextBlock Text="Повторное нажатие" Style="{StaticResource XCap}" />
-                                <ComboBox HorizontalAlignment="Stretch" SelectedIndex="{x:Bind Vm.ModeIndex, Mode=TwoWay}" AutomationProperties.Name="Повторное нажатие">
-                                    <x:String>Наложить поверх играющего</x:String>
-                                    <x:String>Перезапустить звук</x:String>
-                                </ComboBox>
-                            </StackPanel>
-                            <StackPanel Spacing="4">
-                                <TextBlock Text="Задержка" Style="{StaticResource XCap}" />
-                                <ComboBox HorizontalAlignment="Stretch" SelectedIndex="{x:Bind Vm.LatencyIndex, Mode=TwoWay}" AutomationProperties.Name="Задержка">
-                                    <x:String>Обычная (рекомендуется)</x:String>
-                                    <x:String>Надёжная — если звук хрипит на слабом ПК</x:String>
-                                    <x:String>Низкая — экспериментально</x:String>
-                                </ComboBox>
-                            </StackPanel>
-                            <StackPanel Spacing="4">
-                                <TextBlock Text="Канал микрофона" Style="{StaticResource XCap}" />
-                                <ComboBox HorizontalAlignment="Stretch" SelectedIndex="{x:Bind Vm.MicChannelIndex, Mode=TwoWay}" AutomationProperties.Name="Канал микрофона">
-                                    <x:String>Среднее левого и правого</x:String>
-                                    <x:String>Только левый</x:String>
-                                    <x:String>Только правый</x:String>
-                                </ComboBox>
+                            <StackPanel Spacing="8">
+                                <TextBlock Text="ВОСПРОИЗВЕДЕНИЕ" Style="{StaticResource MonoCap}" />
+                                <Border Background="{StaticResource XSurface}" BorderBrush="{StaticResource XLine}" BorderThickness="{Binding CardBorder, Source={StaticResource Shape}}"
+                                        CornerRadius="{Binding Card, Source={StaticResource Shape}}">
+                                    <StackPanel>
+                                        <Grid Style="{StaticResource FirstRow}" ColumnDefinitions="*,Auto">
+                                            <StackPanel VerticalAlignment="Center" Spacing="2">
+                                                <TextBlock Text="Повторное нажатие" Style="{StaticResource RowTitle}" />
+                                                <TextBlock Text="Если звук ещё играет" Style="{StaticResource RowHint}" />
+                                            </StackPanel>
+                                            <Grid Grid.Column="1" ColumnDefinitions="Auto,Auto" Padding="3" VerticalAlignment="Center" Background="{StaticResource XSunken}"
+                                                  CornerRadius="{Binding Control, Source={StaticResource Shape}}">
+                                                <RadioButton x:Name="ModeOverlay" Style="{StaticResource RowSegment}" GroupName="PlayMode" Tag="0" Content="Поверх" Checked="OnModeChecked"
+                                                             CornerRadius="{Binding Inner, Source={StaticResource Shape}}" AutomationProperties.Name="Наложить поверх играющего" />
+                                                <RadioButton x:Name="ModeRestart" Grid.Column="1" Style="{StaticResource RowSegment}" GroupName="PlayMode" Tag="1" Content="Заново" Checked="OnModeChecked"
+                                                             CornerRadius="{Binding Inner, Source={StaticResource Shape}}" AutomationProperties.Name="Перезапустить звук" />
+                                            </Grid>
+                                        </Grid>
+                                        <Grid Style="{StaticResource Row}" ColumnDefinitions="*,Auto">
+                                            <StackPanel VerticalAlignment="Center" Spacing="2">
+                                                <TextBlock Text="Задержка" Style="{StaticResource RowTitle}" />
+                                                <TextBlock Text="«Надёжная» — если звук хрипит на слабом ПК, «Низкая» — экспериментально" Style="{StaticResource RowHint}" />
+                                            </StackPanel>
+                                            <Grid Grid.Column="1" ColumnDefinitions="Auto,Auto,Auto" Padding="3" VerticalAlignment="Center" Background="{StaticResource XSunken}"
+                                                  CornerRadius="{Binding Control, Source={StaticResource Shape}}">
+                                                <RadioButton x:Name="LatencyNormal" Style="{StaticResource RowSegment}" GroupName="Latency" Tag="0" Content="Обычная" Checked="OnLatencyChecked"
+                                                             CornerRadius="{Binding Inner, Source={StaticResource Shape}}" AutomationProperties.Name="Задержка обычная" />
+                                                <RadioButton x:Name="LatencySafe" Grid.Column="1" Style="{StaticResource RowSegment}" GroupName="Latency" Tag="1" Content="Надёжная" Checked="OnLatencyChecked"
+                                                             CornerRadius="{Binding Inner, Source={StaticResource Shape}}" AutomationProperties.Name="Задержка надёжная" />
+                                                <RadioButton x:Name="LatencyLow" Grid.Column="2" Style="{StaticResource RowSegment}" GroupName="Latency" Tag="2" Content="Низкая" Checked="OnLatencyChecked"
+                                                             CornerRadius="{Binding Inner, Source={StaticResource Shape}}" AutomationProperties.Name="Задержка низкая" />
+                                            </Grid>
+                                        </Grid>
+                                    </StackPanel>
+                                </Border>
                             </StackPanel>
                         </StackPanel>
-                    </Expander>
 
-                    <Expander Header="VB-CABLE и Discord" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch">
-                        <StackPanel Spacing="10">
-                            <TextBlock Text="{x:Bind Vm.VbCableText, Mode=OneWay}" TextWrapping="Wrap" />
-                            <HyperlinkButton Content="Скачать VB-CABLE (бесплатно)" Command="{x:Bind Vm.OpenVbCableSiteCommand}" Visibility="{x:Bind Vm.VbCableMissing, Mode=OneWay}" Padding="0" />
-                            <Button Style="{StaticResource XTonalButton}" Command="{x:Bind Vm.ShowSetupGuideCommand}" Content="Как настроить Discord"
-                                    CornerRadius="{Binding Control, Source={StaticResource Shape}}" />
-                            <ItemsControl ItemsSource="{x:Bind Vm.Issues}">
-                                <ItemsControl.ItemTemplate>
-                                    <DataTemplate x:DataType="vm:IssueView">
-                                        <InfoBar IsOpen="True" IsClosable="False" Margin="0,0,0,8" Title="{x:Bind Title}" Message="{x:Bind Message}" Severity="{x:Bind Severity}" />
-                                    </DataTemplate>
-                                </ItemsControl.ItemTemplate>
-                            </ItemsControl>
-                        </StackPanel>
-                    </Expander>
-
-                    <Expander Header="Горячие клавиши" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch">
-                        <StackPanel Spacing="10">
-                            <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="8">
-                                <TextBlock Text="Стоп всё" VerticalAlignment="Center" />
-                                <TextBlock Grid.Column="1" Text="{x:Bind Vm.StopAllHotkeyText, Mode=OneWay}" Style="{StaticResource XSub}" VerticalAlignment="Center" />
-                                <Button Grid.Column="2" Style="{StaticResource XQuietButton}" Content="Назначить…" Command="{x:Bind Vm.AssignStopHotkeyCommand}"
-                                        CornerRadius="{Binding Control, Source={StaticResource Shape}}" AutomationProperties.Name="Назначить клавишу «Стоп всё»" />
+                        <!-- 02 · Горячие клавиши -->
+                        <StackPanel x:Name="PageKeys" Spacing="18" Visibility="Collapsed">
+                            <StackPanel Spacing="8">
+                                <TextBlock Text="ОБЩИЕ" Style="{StaticResource MonoCap}" />
+                                <Border Background="{StaticResource XSurface}" BorderBrush="{StaticResource XLine}" BorderThickness="{Binding CardBorder, Source={StaticResource Shape}}"
+                                        CornerRadius="{Binding Card, Source={StaticResource Shape}}">
+                                    <StackPanel>
+                                        <Grid Style="{StaticResource FirstRow}" ColumnDefinitions="*,Auto,Auto">
+                                            <TextBlock Text="Стоп всё" Style="{StaticResource RowTitle}" VerticalAlignment="Center" />
+                                            <Grid Grid.Column="1" VerticalAlignment="Center">
+                                                <ItemsControl ItemsSource="{x:Bind local:SettingsSheet.KeyParts(Vm.StopAllHotkeyText), Mode=OneWay}" ItemTemplate="{StaticResource KeyCap}" ItemsPanel="{StaticResource KeyRow}" />
+                                                <TextBlock Text="не назначена" Style="{StaticResource RowHint}" Visibility="{x:Bind local:SettingsSheet.Unassigned(Vm.StopAllHotkeyText), Mode=OneWay}" />
+                                            </Grid>
+                                            <Button Grid.Column="2" Style="{StaticResource RowOutline}" Content="Назначить…" Command="{x:Bind Vm.AssignStopHotkeyCommand}"
+                                                    CornerRadius="{Binding Control, Source={StaticResource Shape}}" AutomationProperties.Name="Назначить клавишу «Стоп всё»" />
+                                        </Grid>
+                                        <Grid Style="{StaticResource Row}" ColumnDefinitions="*,Auto,Auto">
+                                            <TextBlock Text="Начать / остановить запись" Style="{StaticResource RowTitle}" VerticalAlignment="Center" />
+                                            <Grid Grid.Column="1" VerticalAlignment="Center">
+                                                <ItemsControl ItemsSource="{x:Bind local:SettingsSheet.KeyParts(Vm.RecordHotkeyText), Mode=OneWay}" ItemTemplate="{StaticResource KeyCap}" ItemsPanel="{StaticResource KeyRow}" />
+                                                <TextBlock Text="не назначена" Style="{StaticResource RowHint}" Visibility="{x:Bind local:SettingsSheet.Unassigned(Vm.RecordHotkeyText), Mode=OneWay}" />
+                                            </Grid>
+                                            <Button Grid.Column="2" Style="{StaticResource RowOutline}" Content="Назначить…" Command="{x:Bind Vm.AssignRecordHotkeyCommand}"
+                                                    CornerRadius="{Binding Control, Source={StaticResource Shape}}" AutomationProperties.Name="Назначить клавишу записи" />
+                                        </Grid>
+                                        <Grid Style="{StaticResource Row}" ColumnDefinitions="*,Auto,Auto">
+                                            <TextBlock Text="Сохранить повтор" Style="{StaticResource RowTitle}" VerticalAlignment="Center" />
+                                            <Grid Grid.Column="1" VerticalAlignment="Center">
+                                                <ItemsControl ItemsSource="{x:Bind local:SettingsSheet.KeyParts(Vm.ReplayHotkeyText), Mode=OneWay}" ItemTemplate="{StaticResource KeyCap}" ItemsPanel="{StaticResource KeyRow}" />
+                                                <TextBlock Text="не назначена" Style="{StaticResource RowHint}" Visibility="{x:Bind local:SettingsSheet.Unassigned(Vm.ReplayHotkeyText), Mode=OneWay}" />
+                                            </Grid>
+                                            <Button Grid.Column="2" Style="{StaticResource RowOutline}" Content="Назначить…" Command="{x:Bind Vm.AssignReplayHotkeyCommand}"
+                                                    CornerRadius="{Binding Control, Source={StaticResource Shape}}" AutomationProperties.Name="Назначить клавишу повтора" />
+                                        </Grid>
+                                    </StackPanel>
+                                </Border>
+                            </StackPanel>
+                            <Grid ColumnDefinitions="Auto,*" ColumnSpacing="12" Padding="14,12" Background="{StaticResource XSunken}" CornerRadius="{Binding Card, Source={StaticResource Shape}}">
+                                <TextBlock Text="i" Style="{StaticResource MonoValue}" FontSize="12" Foreground="{StaticResource XMuted}" VerticalAlignment="Top" />
+                                <TextBlock Grid.Column="1" Style="{StaticResource RowHint}" FontSize="13"
+                                           Text="Клавиши звуков назначаются правой кнопкой по плитке. Все клавиши работают в любой программе и в полноэкранных играх." />
                             </Grid>
-                            <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="8">
-                                <TextBlock Text="Начать/остановить запись" VerticalAlignment="Center" />
-                                <TextBlock Grid.Column="1" Text="{x:Bind Vm.RecordHotkeyText, Mode=OneWay}" Style="{StaticResource XSub}" VerticalAlignment="Center" />
-                                <Button Grid.Column="2" Style="{StaticResource XQuietButton}" Content="Назначить…" Command="{x:Bind Vm.AssignRecordHotkeyCommand}"
-                                        CornerRadius="{Binding Control, Source={StaticResource Shape}}" AutomationProperties.Name="Назначить клавишу записи" />
-                            </Grid>
-                            <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="8">
-                                <TextBlock Text="Сохранить повтор" VerticalAlignment="Center" />
-                                <TextBlock Grid.Column="1" Text="{x:Bind Vm.ReplayHotkeyText, Mode=OneWay}" Style="{StaticResource XSub}" VerticalAlignment="Center" />
-                                <Button Grid.Column="2" Style="{StaticResource XQuietButton}" Content="Назначить…" Command="{x:Bind Vm.AssignReplayHotkeyCommand}"
-                                        CornerRadius="{Binding Control, Source={StaticResource Shape}}" AutomationProperties.Name="Назначить клавишу повтора" />
-                            </Grid>
-                            <TextBlock Text="Клавиши звуков — правой кнопкой по плитке. Работают в любой программе и в полноэкранных играх." Style="{StaticResource XSub}" />
                         </StackPanel>
-                    </Expander>
 
-                    <Expander Header="Запись и повтор" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch">
-                        <StackPanel Spacing="10">
-                            <ToggleSwitch Header="Постоянно хранить последние секунды звука компьютера" IsOn="{x:Bind Vm.ReplayEnabled, Mode=TwoWay}" OnContent="Включено" OffContent="Выключено" />
-                            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
-                                <TextBlock Text="Длина повтора" VerticalAlignment="Center" />
-                                <TextBlock Grid.Column="1" Text="{x:Bind Vm.ReplayTitle, Mode=OneWay}" Style="{StaticResource XSub}" />
-                            </Grid>
-                            <Slider Minimum="10" Maximum="120" StepFrequency="5" Value="{x:Bind Vm.ReplaySeconds, Mode=TwoWay}" AutomationProperties.Name="Длина буфера повтора" />
-                            <TextBlock Text="{x:Bind Vm.ReplayStatusText, Mode=OneWay}" Style="{StaticResource XSub}" />
-                        </StackPanel>
-                    </Expander>
-
-                    <Expander Header="Запуск и трей" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch">
-                        <StackPanel Spacing="10">
-                            <ToggleSwitch Header="Запускать вместе с Windows" IsOn="{x:Bind Vm.AutostartEnabled, Mode=TwoWay}" OnContent="Да — свёрнутым в трей" OffContent="Нет" />
-                            <TextBlock Text="{x:Bind Vm.AutostartHint, Mode=OneWay}" Style="{StaticResource XSub}" Visibility="{x:Bind Vm.HasAutostartHint, Mode=OneWay}" />
-                            <ToggleSwitch Header="Кнопка ✕ в окне" IsOn="{x:Bind Vm.CloseToTray, Mode=TwoWay}" OnContent="Прячет в трей — звуки и клавиши работают" OffContent="Закрывает программу"
-                                          AutomationProperties.Name="Сворачивать в трей" />
-                        </StackPanel>
-                    </Expander>
-
-                    <Expander Header="Обновления и версия" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch">
-                        <StackPanel Spacing="10">
-                            <TextBlock Text="{x:Bind Vm.AppVersionText, Mode=OneWay}" Style="{StaticResource XHead}" />
-                            <ToggleSwitch Header="Проверять, не вышла ли новая версия" IsOn="{x:Bind Vm.CheckForUpdates, Mode=TwoWay}"
-                                          OnContent="Да — скачивается только по кнопке" OffContent="Нет" />
-                            <TextBlock Text="{x:Bind Vm.UpdateStatusText, Mode=OneWay}" Style="{StaticResource XSub}" />
-                            <ProgressBar Maximum="100" Value="{x:Bind Vm.UpdateProgress, Mode=OneWay}" Visibility="{x:Bind Vm.UpdateBusy, Mode=OneWay}" />
-                            <StackPanel Orientation="Horizontal" Spacing="8">
-                                <Button Style="{StaticResource XPrimaryButton}" MinHeight="36" FontSize="14" Command="{x:Bind Vm.InstallUpdateCommand}"
-                                        Content="{x:Bind Vm.UpdateButtonText, Mode=OneWay}" Visibility="{x:Bind Vm.UpdateAvailable, Mode=OneWay}"
-                                        IsEnabled="{x:Bind Vm.UpdateIdle, Mode=OneWay}" CornerRadius="{Binding Control, Source={StaticResource Shape}}" />
-                                <Button Style="{StaticResource XTonalButton}" Command="{x:Bind Vm.CheckUpdatesNowCommand}" Content="Проверить сейчас"
-                                        IsEnabled="{x:Bind Vm.UpdateIdle, Mode=OneWay}" CornerRadius="{Binding Control, Source={StaticResource Shape}}" />
+                        <!-- 03 · Запись и повтор -->
+                        <StackPanel x:Name="PageRecord" Spacing="18" Visibility="Collapsed">
+                            <StackPanel Spacing="8">
+                                <TextBlock Text="ПОВТОР" Style="{StaticResource MonoCap}" />
+                                <Border Background="{StaticResource XSurface}" BorderBrush="{StaticResource XLine}" BorderThickness="{Binding CardBorder, Source={StaticResource Shape}}"
+                                        CornerRadius="{Binding Card, Source={StaticResource Shape}}">
+                                    <StackPanel>
+                                        <Grid Style="{StaticResource FirstRow}" ColumnDefinitions="*,Auto">
+                                            <StackPanel VerticalAlignment="Center" Spacing="2">
+                                                <TextBlock Text="Хранить последние секунды звука компьютера" Style="{StaticResource RowTitle}" />
+                                                <TextBlock Text="{x:Bind Vm.ReplayStatusText, Mode=OneWay}" Style="{StaticResource RowHint}" />
+                                            </StackPanel>
+                                            <ToggleSwitch Grid.Column="1" IsOn="{x:Bind Vm.ReplayEnabled, Mode=TwoWay}" OnContent="" OffContent="" MinWidth="0"
+                                                          VerticalAlignment="Center" AutomationProperties.Name="Хранить последние секунды звука компьютера" />
+                                        </Grid>
+                                        <Grid Style="{StaticResource Row}" ColumnDefinitions="*,Auto,Auto">
+                                            <StackPanel VerticalAlignment="Center" Spacing="2">
+                                                <TextBlock Text="Длина повтора" Style="{StaticResource RowTitle}" />
+                                                <TextBlock Text="От 10 до 120 секунд" Style="{StaticResource RowHint}" />
+                                            </StackPanel>
+                                            <Slider Grid.Column="1" Width="240" VerticalAlignment="Center" Minimum="10" Maximum="120" StepFrequency="5" TickFrequency="10" TickPlacement="Outside"
+                                                    Value="{x:Bind Vm.ReplaySeconds, Mode=TwoWay}" AutomationProperties.Name="Длина буфера повтора" />
+                                            <Border Grid.Column="2" MinWidth="58" Height="30" Padding="8,0" VerticalAlignment="Center" Background="{StaticResource XBg}"
+                                                    BorderBrush="{StaticResource XLine}" BorderThickness="1" CornerRadius="{Binding Inner, Source={StaticResource Shape}}">
+                                                <TextBlock Text="{x:Bind Vm.ReplayLengthText, Mode=OneWay}" Style="{StaticResource MonoValue}" HorizontalAlignment="Right" />
+                                            </Border>
+                                        </Grid>
+                                    </StackPanel>
+                                </Border>
                             </StackPanel>
-                            <TextBlock Text="Поделиться с другом: ссылка всегда ведёт на установщик последней версии. Другу понадобится и VB-CABLE — Xoard подскажет." Style="{StaticResource XSub}" />
-                            <Button Style="{StaticResource XQuietButton}" Command="{x:Bind Vm.CopySetupLinkCommand}" Padding="0" HorizontalAlignment="Left"
-                                    CornerRadius="{Binding Control, Source={StaticResource Shape}}">
-                                <StackPanel Orientation="Horizontal" Spacing="8">
-                                    <FontIcon Glyph="&#xE8C8;" FontSize="14" />
-                                    <TextBlock Text="Скопировать ссылку на установщик" />
+                            <Grid ColumnDefinitions="Auto,*" ColumnSpacing="12" Padding="14,12" Background="{StaticResource XSunken}" CornerRadius="{Binding Card, Source={StaticResource Shape}}">
+                                <TextBlock Text="i" Style="{StaticResource MonoValue}" FontSize="12" Foreground="{StaticResource XMuted}" VerticalAlignment="Top" />
+                                <TextBlock Grid.Column="1" Style="{StaticResource RowHint}" FontSize="13"
+                                           Text="Повтор хранится только в памяти (около 11 МБ на 30 с) и пишет всё, что играет компьютер, кроме самого Xoard. Запись и повтор из окна сначала открываются в редакторе: сохраните кусок, всё целиком или выбросьте." />
+                            </Grid>
+                        </StackPanel>
+
+                        <!-- 04 · Вид -->
+                        <StackPanel x:Name="PageLook" Spacing="18" Visibility="Collapsed">
+                            <StackPanel Spacing="8">
+                                <TextBlock Text="РАСКЛАДКА" Style="{StaticResource MonoCap}" />
+                                <Grid ColumnDefinitions="*,*,*" ColumnSpacing="10">
+                                    <Button Style="{StaticResource XButton}" Padding="0" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch" VerticalAlignment="Top"
+                                            Command="{x:Bind Vm.PickLayoutCommand}" CommandParameter="pult" AutomationProperties.Name="Раскладка «Пульт»">
+                                        <StackPanel Spacing="6">
+                                            <Grid>
+                                                <Border Height="70" Padding="7" Background="{StaticResource XSurface}" BorderBrush="{StaticResource XLine}" BorderThickness="1"
+                                                        CornerRadius="{Binding Control, Source={StaticResource Shape}}">
+                                                    <Grid ColumnDefinitions="2*,*" RowDefinitions="10,*" ColumnSpacing="4" RowSpacing="4">
+                                                        <Border Grid.ColumnSpan="2" Background="{StaticResource XPrimary}" CornerRadius="2" />
+                                                        <Grid Grid.Row="1" ColumnDefinitions="*,*,*" RowDefinitions="*,*" ColumnSpacing="3" RowSpacing="3">
+                                                            <Border Background="{StaticResource XWave}" CornerRadius="2" />
+                                                            <Border Grid.Column="1" Background="{StaticResource XWave}" CornerRadius="2" />
+                                                            <Border Grid.Column="2" Background="{StaticResource XWave}" CornerRadius="2" />
+                                                            <Border Grid.Row="1" Background="{StaticResource XWave}" CornerRadius="2" />
+                                                            <Border Grid.Row="1" Grid.Column="1" Background="{StaticResource XWave}" CornerRadius="2" />
+                                                            <Border Grid.Row="1" Grid.Column="2" Background="{StaticResource XWave}" CornerRadius="2" />
+                                                        </Grid>
+                                                        <Grid Grid.Row="1" Grid.Column="1" RowDefinitions="*,*" RowSpacing="3">
+                                                            <Border Background="{StaticResource XTrack}" CornerRadius="2" />
+                                                            <Border Grid.Row="1" Background="{StaticResource XTrack}" CornerRadius="2" />
+                                                        </Grid>
+                                                    </Grid>
+                                                </Border>
+                                                <Border BorderBrush="{StaticResource XPrimary}" BorderThickness="2" CornerRadius="{Binding Control, Source={StaticResource Shape}}"
+                                                        Visibility="{x:Bind Vm.IsLayoutPult, Mode=OneWay}" />
+                                            </Grid>
+                                            <TextBlock Text="Пульт" Style="{StaticResource XCap}" Foreground="{StaticResource XInk}" />
+                                        </StackPanel>
+                                    </Button>
+                                    <Button Grid.Column="1" Style="{StaticResource XButton}" Padding="0" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch" VerticalAlignment="Top"
+                                            Command="{x:Bind Vm.PickLayoutCommand}" CommandParameter="dock" AutomationProperties.Name="Раскладка «Док»">
+                                        <StackPanel Spacing="6">
+                                            <Grid>
+                                                <Border Height="70" Padding="7" Background="{StaticResource XSurface}" BorderBrush="{StaticResource XLine}" BorderThickness="1"
+                                                        CornerRadius="{Binding Control, Source={StaticResource Shape}}">
+                                                    <Grid RowDefinitions="8,*,9" RowSpacing="4">
+                                                        <Border Background="{StaticResource XPrimary}" CornerRadius="2" />
+                                                        <Grid Grid.Row="1" ColumnDefinitions="*,*,*,*" ColumnSpacing="3">
+                                                            <Border Background="{StaticResource XWave}" CornerRadius="2" />
+                                                            <Border Grid.Column="1" Background="{StaticResource XWave}" CornerRadius="2" />
+                                                            <Border Grid.Column="2" Background="{StaticResource XWave}" CornerRadius="2" />
+                                                            <Border Grid.Column="3" Background="{StaticResource XWave}" CornerRadius="2" />
+                                                        </Grid>
+                                                        <Border Grid.Row="2" Width="52" Background="{StaticResource XTrack}" CornerRadius="2" />
+                                                    </Grid>
+                                                </Border>
+                                                <Border BorderBrush="{StaticResource XPrimary}" BorderThickness="2" CornerRadius="{Binding Control, Source={StaticResource Shape}}"
+                                                        Visibility="{x:Bind Vm.IsLayoutDock, Mode=OneWay}" />
+                                            </Grid>
+                                            <TextBlock Text="Док" Style="{StaticResource XCap}" Foreground="{StaticResource XInk}" />
+                                        </StackPanel>
+                                    </Button>
+                                    <Button Grid.Column="2" Style="{StaticResource XButton}" Padding="0" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch" VerticalAlignment="Top"
+                                            Command="{x:Bind Vm.PickLayoutCommand}" CommandParameter="stream" AutomationProperties.Name="Раскладка «Лента»">
+                                        <StackPanel Spacing="6">
+                                            <Grid>
+                                                <Border Height="70" Padding="7" Background="{StaticResource XSurface}" BorderBrush="{StaticResource XLine}" BorderThickness="1"
+                                                        CornerRadius="{Binding Control, Source={StaticResource Shape}}">
+                                                    <StackPanel Width="64" Spacing="3">
+                                                        <Border Height="15" Background="{StaticResource XPrimary}" CornerRadius="2" />
+                                                        <Border Height="7" Background="{StaticResource XWave}" CornerRadius="2" />
+                                                        <Border Height="7" Background="{StaticResource XWave}" CornerRadius="2" />
+                                                        <Border Height="7" Background="{StaticResource XWave}" CornerRadius="2" />
+                                                        <Border Height="7" Width="40" Background="{StaticResource XTrack}" CornerRadius="2" />
+                                                    </StackPanel>
+                                                </Border>
+                                                <Border BorderBrush="{StaticResource XPrimary}" BorderThickness="2" CornerRadius="{Binding Control, Source={StaticResource Shape}}"
+                                                        Visibility="{x:Bind Vm.IsLayoutStream, Mode=OneWay}" />
+                                            </Grid>
+                                            <TextBlock Text="Лента" Style="{StaticResource XCap}" Foreground="{StaticResource XInk}" />
+                                        </StackPanel>
+                                    </Button>
+                                </Grid>
+                            </StackPanel>
+
+                            <StackPanel Spacing="8">
+                                <TextBlock Text="ПАЛИТРА" Style="{StaticResource MonoCap}" />
+                                <ItemsControl ItemsSource="{x:Bind Vm.PaletteChoices}">
+                                    <ItemsControl.ItemsPanel>
+                                        <ItemsPanelTemplate>
+                                            <ItemsWrapGrid Orientation="Horizontal" MaximumRowsOrColumns="6" ItemWidth="104" ItemHeight="72" />
+                                        </ItemsPanelTemplate>
+                                    </ItemsControl.ItemsPanel>
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate x:DataType="vm:PaletteChoice">
+                                            <Button Style="{StaticResource XButton}" Command="{x:Bind PickCommand}" Padding="0" Width="94" HorizontalContentAlignment="Stretch"
+                                                    VerticalAlignment="Top" AutomationProperties.Name="{x:Bind Name}">
+                                                <StackPanel Spacing="5">
+                                                    <Grid Height="42" Background="{x:Bind Bg}" CornerRadius="{Binding Control, Source={StaticResource Shape}}">
+                                                        <StackPanel VerticalAlignment="Center" Margin="8,0" Spacing="5">
+                                                            <Border Height="12" Background="{x:Bind Card}" CornerRadius="2" BorderBrush="#40808080" BorderThickness="1" />
+                                                            <StackPanel Orientation="Horizontal" Spacing="4">
+                                                                <Border Width="18" Height="5" Background="{x:Bind Main}" CornerRadius="1" />
+                                                                <Border Width="5" Height="5" Background="{x:Bind Accent}" CornerRadius="1" />
+                                                            </StackPanel>
+                                                        </StackPanel>
+                                                        <Border BorderBrush="{StaticResource XLine}" BorderThickness="1" CornerRadius="{Binding Control, Source={StaticResource Shape}}" />
+                                                        <Border BorderBrush="{StaticResource XPrimary}" BorderThickness="2" CornerRadius="{Binding Control, Source={StaticResource Shape}}"
+                                                                Visibility="{x:Bind IsSelected, Mode=OneWay}" />
+                                                    </Grid>
+                                                    <TextBlock Text="{x:Bind Name}" Style="{StaticResource XCap}" TextTrimming="CharacterEllipsis" />
+                                                </StackPanel>
+                                            </Button>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                            </StackPanel>
+
+                            <Border Background="{StaticResource XSurface}" BorderBrush="{StaticResource XLine}" BorderThickness="{Binding CardBorder, Source={StaticResource Shape}}"
+                                    CornerRadius="{Binding Card, Source={StaticResource Shape}}">
+                                <StackPanel>
+                                    <Grid Style="{StaticResource FirstRow}" ColumnDefinitions="*,Auto">
+                                        <StackPanel VerticalAlignment="Center" Spacing="2">
+                                            <TextBlock Text="Форма" Style="{StaticResource RowTitle}" />
+                                            <TextBlock Text="Строгая — тонкие линии и острые углы, мягкая — скругления" Style="{StaticResource RowHint}" />
+                                        </StackPanel>
+                                        <Grid Grid.Column="1" ColumnDefinitions="Auto,Auto" Padding="3" VerticalAlignment="Center" Background="{StaticResource XSunken}"
+                                              CornerRadius="{Binding Control, Source={StaticResource Shape}}">
+                                            <RadioButton Style="{StaticResource RowSegment}" GroupName="Shape" Content="Строгая" IsChecked="{x:Bind Vm.IsStrictShape, Mode=TwoWay}"
+                                                         CornerRadius="{Binding Inner, Source={StaticResource Shape}}" />
+                                            <RadioButton Grid.Column="1" Style="{StaticResource RowSegment}" GroupName="Shape" Content="Мягкая" IsChecked="{x:Bind Vm.IsSoftShape, Mode=TwoWay}"
+                                                         CornerRadius="{Binding Inner, Source={StaticResource Shape}}" />
+                                        </Grid>
+                                    </Grid>
+                                    <Grid Style="{StaticResource Row}" ColumnDefinitions="*,Auto">
+                                        <StackPanel VerticalAlignment="Center" Spacing="2">
+                                            <TextBlock Text="Анимации" Style="{StaticResource RowTitle}" />
+                                            <TextBlock Text="Выключаются и вместе с анимациями Windows" Style="{StaticResource RowHint}" />
+                                        </StackPanel>
+                                        <ToggleSwitch Grid.Column="1" IsOn="{x:Bind Vm.AnimationsEnabled, Mode=TwoWay}" OnContent="" OffContent="" MinWidth="0"
+                                                      VerticalAlignment="Center" AutomationProperties.Name="Анимации" />
+                                    </Grid>
                                 </StackPanel>
-                            </Button>
+                            </Border>
                         </StackPanel>
-                    </Expander>
 
-                    <Expander Header="Claude Desktop" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch">
-                        <StackPanel Spacing="10">
-                            <TextBlock Text="Путь к серверу Xoard для claude_desktop_config.json. Он не меняется от обновлений." Style="{StaticResource XSub}" />
-                            <TextBlock Text="{x:Bind Vm.McpPathText}" FontSize="13" TextWrapping="Wrap" IsTextSelectionEnabled="True" />
-                            <Button Style="{StaticResource XTonalButton}" Command="{x:Bind Vm.CopyMcpPathCommand}" Content="Скопировать путь"
-                                    Visibility="{x:Bind Vm.HasMcpPath}" CornerRadius="{Binding Control, Source={StaticResource Shape}}" />
+                        <!-- 05 · Папка звуков -->
+                        <StackPanel x:Name="PageFolder" Spacing="18" Visibility="Collapsed">
+                            <StackPanel Spacing="8">
+                                <TextBlock Text="СЕЙЧАС" Style="{StaticResource MonoCap}" />
+                                <Border Padding="14" Background="{StaticResource XSurface}" BorderBrush="{StaticResource XLine}" BorderThickness="{Binding CardBorder, Source={StaticResource Shape}}"
+                                        CornerRadius="{Binding Card, Source={StaticResource Shape}}">
+                                    <StackPanel Spacing="14">
+                                        <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="10" MinHeight="40" Padding="12,0" Background="{StaticResource XBg}"
+                                              BorderBrush="{StaticResource XLine}" BorderThickness="1" CornerRadius="{Binding Control, Source={StaticResource Shape}}">
+                                            <FontIcon Glyph="&#xE8B7;" FontSize="15" Foreground="{StaticResource XMuted}" VerticalAlignment="Center" />
+                                            <TextBlock Grid.Column="1" Text="{x:Bind Vm.SoundsFolder, Mode=OneWay}" Style="{StaticResource MonoValue}" TextTrimming="CharacterEllipsis"
+                                                       IsTextSelectionEnabled="True" ToolTipService.ToolTip="{x:Bind Vm.SoundsFolder, Mode=OneWay}" />
+                                            <Border Grid.Column="2" Padding="6,2" VerticalAlignment="Center" Background="{StaticResource XAccentSoft}"
+                                                    CornerRadius="{Binding Chip, Source={StaticResource Shape}}" Visibility="{x:Bind Vm.IsCustomSoundsFolder, Mode=OneWay}">
+                                                <TextBlock Text="СВОЯ" Style="{StaticResource MonoCap}" Foreground="{StaticResource XInk}" />
+                                            </Border>
+                                        </Grid>
+                                        <StackPanel Orientation="Horizontal" Spacing="28">
+                                            <StackPanel Spacing="2">
+                                                <TextBlock x:Name="SoundsStat" Text="0" FontFamily="{StaticResource XFontMono}" FontSize="22" FontWeight="SemiBold" />
+                                                <TextBlock Text="ЗВУКИ" Style="{StaticResource MonoCap}" />
+                                            </StackPanel>
+                                            <StackPanel Spacing="2">
+                                                <TextBlock x:Name="HotkeysStat" Text="0" FontFamily="{StaticResource XFontMono}" FontSize="22" FontWeight="SemiBold" />
+                                                <TextBlock Text="С КЛАВИШЕЙ" Style="{StaticResource MonoCap}" />
+                                            </StackPanel>
+                                        </StackPanel>
+                                        <Grid ColumnDefinitions="Auto,Auto,*,Auto" ColumnSpacing="8">
+                                            <Button Style="{StaticResource RowPrimary}" Content="Выбрать другую…" Command="{x:Bind Vm.ChooseSoundsFolderCommand}"
+                                                    CornerRadius="{Binding Control, Source={StaticResource Shape}}" />
+                                            <Button Grid.Column="1" Style="{StaticResource RowOutline}" Content="Открыть" Command="{x:Bind Vm.OpenSoundsFolderCommand}"
+                                                    CornerRadius="{Binding Control, Source={StaticResource Shape}}" AutomationProperties.Name="Открыть папку звуков" />
+                                            <Button Grid.Column="3" Style="{StaticResource RowOutline}" Content="Вернуть обычную" Command="{x:Bind Vm.ResetSoundsFolderCommand}"
+                                                    Visibility="{x:Bind Vm.IsCustomSoundsFolder, Mode=OneWay}" CornerRadius="{Binding Control, Source={StaticResource Shape}}" />
+                                        </Grid>
+                                    </StackPanel>
+                                </Border>
+                                <TextBlock Style="{StaticResource RowHint}" Visibility="{x:Bind Vm.IsCustomSoundsFolder, Mode=OneWay}">
+                                    <Run Text="Обычная — " /><Run Text="{x:Bind Vm.DefaultSoundsFolder}" FontFamily="{StaticResource XFontMono}" />
+                                </TextBlock>
+                            </StackPanel>
+                            <Grid ColumnDefinitions="Auto,*" ColumnSpacing="12" Padding="14,12" Background="{StaticResource XSunken}" CornerRadius="{Binding Card, Source={StaticResource Shape}}">
+                                <TextBlock Text="i" Style="{StaticResource MonoValue}" FontSize="12" Foreground="{StaticResource XMuted}" VerticalAlignment="Top" />
+                                <TextBlock Grid.Column="1" Style="{StaticResource RowHint}" FontSize="13"
+                                           Text="Сюда же сохраняются записи и повторы. При смене Xoard спросит: перенести звуки в новую папку или просто переключиться на неё. Клавиши звуков сохранятся." />
+                            </Grid>
                         </StackPanel>
-                    </Expander>
 
-                    <Expander Header="Папка звуков" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch">
-                        <StackPanel Spacing="10">
-                            <TextBlock Text="{x:Bind Vm.SoundsFolder}" Style="{StaticResource XSub}" IsTextSelectionEnabled="True" />
-                            <Button Style="{StaticResource XTonalButton}" Content="Открыть папку" Command="{x:Bind Vm.OpenSoundsFolderCommand}"
-                                    CornerRadius="{Binding Control, Source={StaticResource Shape}}" />
+                        <!-- 06 · VB-CABLE и Discord -->
+                        <StackPanel x:Name="PageCable" Spacing="18" Visibility="Collapsed">
+                            <StackPanel Spacing="8">
+                                <TextBlock Text="ВИРТУАЛЬНЫЙ МИКРОФОН" Style="{StaticResource MonoCap}" />
+                                <Border Background="{StaticResource XSurface}" BorderBrush="{StaticResource XLine}" BorderThickness="{Binding CardBorder, Source={StaticResource Shape}}"
+                                        CornerRadius="{Binding Card, Source={StaticResource Shape}}">
+                                    <StackPanel>
+                                        <Grid Style="{StaticResource FirstRow}" ColumnDefinitions="Auto,*,Auto">
+                                            <Rectangle Width="8" Height="8" VerticalAlignment="Center" Fill="{x:Bind local:SettingsSheet.CableDot(Vm.VbCableMissing), Mode=OneWay}" />
+                                            <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2">
+                                                <TextBlock Text="VB-CABLE" Style="{StaticResource RowTitle}" />
+                                                <TextBlock Text="{x:Bind Vm.VbCableText, Mode=OneWay}" Style="{StaticResource RowHint}" />
+                                            </StackPanel>
+                                            <Button Grid.Column="2" Style="{StaticResource RowPrimary}" Content="Скачать VB-CABLE" Command="{x:Bind Vm.OpenVbCableSiteCommand}"
+                                                    Visibility="{x:Bind Vm.VbCableMissing, Mode=OneWay}" CornerRadius="{Binding Control, Source={StaticResource Shape}}" />
+                                        </Grid>
+                                        <Grid Style="{StaticResource Row}" ColumnDefinitions="Auto,*,Auto">
+                                            <FontIcon Glyph="&#xE8BD;" FontSize="14" Foreground="{StaticResource XMuted}" VerticalAlignment="Center" />
+                                            <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2">
+                                                <TextBlock Text="Discord" Style="{StaticResource RowTitle}" />
+                                                <TextBlock Text="Устройство ввода — CABLE Output, шумоподавление выключено" Style="{StaticResource RowHint}" />
+                                            </StackPanel>
+                                            <Button Grid.Column="2" Style="{StaticResource RowOutline}" Content="Как настроить" Command="{x:Bind Vm.ShowSetupGuideCommand}"
+                                                    CornerRadius="{Binding Control, Source={StaticResource Shape}}" AutomationProperties.Name="Как настроить Discord" />
+                                        </Grid>
+                                    </StackPanel>
+                                </Border>
+                            </StackPanel>
+                            <StackPanel Spacing="8" Visibility="{x:Bind local:SettingsSheet.AnyItems(Vm.Issues.Count), Mode=OneWay}">
+                                <TextBlock Text="ЧТО НЕ ТАК" Style="{StaticResource MonoCap}" />
+                                <ItemsControl ItemsSource="{x:Bind Vm.Issues}">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate x:DataType="vm:IssueView">
+                                            <InfoBar IsOpen="True" IsClosable="False" Margin="0,0,0,8" Title="{x:Bind Title}" Message="{x:Bind Message}" Severity="{x:Bind Severity}" />
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                            </StackPanel>
                         </StackPanel>
-                    </Expander>
-                </StackPanel>
-            </StackPanel>
-        </ScrollViewer>
-    </Grid>
+
+                        <!-- 07 · Запуск и трей -->
+                        <StackPanel x:Name="PageStartup" Spacing="18" Visibility="Collapsed">
+                            <Border Background="{StaticResource XSurface}" BorderBrush="{StaticResource XLine}" BorderThickness="{Binding CardBorder, Source={StaticResource Shape}}"
+                                    CornerRadius="{Binding Card, Source={StaticResource Shape}}">
+                                <StackPanel>
+                                    <Grid Style="{StaticResource FirstRow}" ColumnDefinitions="*,Auto">
+                                        <StackPanel VerticalAlignment="Center" Spacing="2">
+                                            <TextBlock Text="Запускать вместе с Windows" Style="{StaticResource RowTitle}" />
+                                            <TextBlock Text="Свёрнутым в трей — звуки и клавиши готовы сразу" Style="{StaticResource RowHint}" />
+                                            <TextBlock Text="{x:Bind Vm.AutostartHint, Mode=OneWay}" Style="{StaticResource RowHint}" Foreground="{StaticResource XInk}"
+                                                       Visibility="{x:Bind Vm.HasAutostartHint, Mode=OneWay}" />
+                                        </StackPanel>
+                                        <ToggleSwitch Grid.Column="1" IsOn="{x:Bind Vm.AutostartEnabled, Mode=TwoWay}" OnContent="" OffContent="" MinWidth="0"
+                                                      VerticalAlignment="Center" AutomationProperties.Name="Запускать вместе с Windows" />
+                                    </Grid>
+                                    <Grid Style="{StaticResource Row}" ColumnDefinitions="*,Auto">
+                                        <StackPanel VerticalAlignment="Center" Spacing="2">
+                                            <TextBlock Text="Кнопка ✕ прячет окно в трей" Style="{StaticResource RowTitle}" />
+                                            <TextBlock Text="Звуки, клавиши и Claude продолжают работать. Выключите — ✕ закроет программу." Style="{StaticResource RowHint}" />
+                                        </StackPanel>
+                                        <ToggleSwitch Grid.Column="1" IsOn="{x:Bind Vm.CloseToTray, Mode=TwoWay}" OnContent="" OffContent="" MinWidth="0"
+                                                      VerticalAlignment="Center" AutomationProperties.Name="Сворачивать в трей" />
+                                    </Grid>
+                                </StackPanel>
+                            </Border>
+                        </StackPanel>
+
+                        <!-- 08 · Обновления -->
+                        <StackPanel x:Name="PageUpdates" Spacing="18" Visibility="Collapsed">
+                            <StackPanel Spacing="8">
+                                <TextBlock Text="ВЕРСИЯ" Style="{StaticResource MonoCap}" />
+                                <Border Background="{StaticResource XSurface}" BorderBrush="{StaticResource XLine}" BorderThickness="{Binding CardBorder, Source={StaticResource Shape}}"
+                                        CornerRadius="{Binding Card, Source={StaticResource Shape}}">
+                                    <StackPanel>
+                                        <Grid Style="{StaticResource FirstRow}" ColumnDefinitions="*,Auto">
+                                            <TextBlock Text="Установлена" Style="{StaticResource RowTitle}" VerticalAlignment="Center" />
+                                            <TextBlock Grid.Column="1" Text="{x:Bind Vm.AppVersionText}" Style="{StaticResource MonoValue}" />
+                                        </Grid>
+                                        <Grid Style="{StaticResource Row}" ColumnDefinitions="*,Auto">
+                                            <StackPanel VerticalAlignment="Center" Spacing="2">
+                                                <TextBlock Text="Проверять, не вышла ли новая" Style="{StaticResource RowTitle}" />
+                                                <TextBlock Text="При запуске и раз в 6 часов. Скачивается и ставится только по кнопке «Обновить»" Style="{StaticResource RowHint}" />
+                                            </StackPanel>
+                                            <ToggleSwitch Grid.Column="1" IsOn="{x:Bind Vm.CheckForUpdates, Mode=TwoWay}" OnContent="" OffContent="" MinWidth="0"
+                                                          VerticalAlignment="Center" AutomationProperties.Name="Проверять обновления" />
+                                        </Grid>
+                                        <StackPanel Padding="14,12" Spacing="10" BorderBrush="{StaticResource XLine}" BorderThickness="0,1,0,0">
+                                            <TextBlock Text="{x:Bind Vm.UpdateStatusText, Mode=OneWay}" Style="{StaticResource RowHint}" FontSize="13" />
+                                            <ProgressBar Maximum="100" Value="{x:Bind Vm.UpdateProgress, Mode=OneWay}" Visibility="{x:Bind Vm.UpdateBusy, Mode=OneWay}" />
+                                            <StackPanel Orientation="Horizontal" Spacing="8">
+                                                <Button Style="{StaticResource RowPrimary}" Command="{x:Bind Vm.InstallUpdateCommand}" Content="{x:Bind Vm.UpdateButtonText, Mode=OneWay}"
+                                                        Visibility="{x:Bind Vm.UpdateAvailable, Mode=OneWay}" IsEnabled="{x:Bind Vm.UpdateIdle, Mode=OneWay}"
+                                                        CornerRadius="{Binding Control, Source={StaticResource Shape}}" />
+                                                <Button Style="{StaticResource RowOutline}" Command="{x:Bind Vm.CheckUpdatesNowCommand}" Content="Проверить сейчас"
+                                                        IsEnabled="{x:Bind Vm.UpdateIdle, Mode=OneWay}" CornerRadius="{Binding Control, Source={StaticResource Shape}}" />
+                                            </StackPanel>
+                                        </StackPanel>
+                                    </StackPanel>
+                                </Border>
+                            </StackPanel>
+                            <StackPanel Spacing="8">
+                                <TextBlock Text="ДРУГУ" Style="{StaticResource MonoCap}" />
+                                <Border Background="{StaticResource XSurface}" BorderBrush="{StaticResource XLine}" BorderThickness="{Binding CardBorder, Source={StaticResource Shape}}"
+                                        CornerRadius="{Binding Card, Source={StaticResource Shape}}">
+                                    <Grid Style="{StaticResource FirstRow}" ColumnDefinitions="*,Auto">
+                                        <StackPanel VerticalAlignment="Center" Spacing="2">
+                                            <TextBlock Text="Ссылка на установщик" Style="{StaticResource RowTitle}" />
+                                            <TextBlock Text="Всегда ведёт на последнюю версию. Другу понадобится и VB-CABLE — Xoard подскажет." Style="{StaticResource RowHint}" />
+                                        </StackPanel>
+                                        <Button Grid.Column="1" Style="{StaticResource RowOutline}" Command="{x:Bind Vm.CopySetupLinkCommand}" VerticalAlignment="Center"
+                                                CornerRadius="{Binding Control, Source={StaticResource Shape}}" AutomationProperties.Name="Скопировать ссылку на установщик">
+                                            <StackPanel Orientation="Horizontal" Spacing="8">
+                                                <FontIcon Glyph="&#xE8C8;" FontSize="13" />
+                                                <TextBlock Text="Скопировать" />
+                                            </StackPanel>
+                                        </Button>
+                                    </Grid>
+                                </Border>
+                            </StackPanel>
+                        </StackPanel>
+
+                        <!-- 09 · Claude Desktop -->
+                        <StackPanel x:Name="PageClaude" Spacing="18" Visibility="Collapsed">
+                            <StackPanel Spacing="8">
+                                <TextBlock Text="СЕРВЕР XOARD" Style="{StaticResource MonoCap}" />
+                                <Border Padding="14" Background="{StaticResource XSurface}" BorderBrush="{StaticResource XLine}" BorderThickness="{Binding CardBorder, Source={StaticResource Shape}}"
+                                        CornerRadius="{Binding Card, Source={StaticResource Shape}}">
+                                    <StackPanel Spacing="12">
+                                        <TextBlock Text="Путь для claude_desktop_config.json. Он не меняется от обновлений — настроить нужно один раз." Style="{StaticResource RowHint}" FontSize="13" />
+                                        <Border Padding="12,10" Background="{StaticResource XBg}" BorderBrush="{StaticResource XLine}" BorderThickness="1"
+                                                CornerRadius="{Binding Control, Source={StaticResource Shape}}">
+                                            <TextBlock Text="{x:Bind Vm.McpPathText}" Style="{StaticResource MonoValue}" TextWrapping="Wrap" IsTextSelectionEnabled="True" />
+                                        </Border>
+                                        <Button Style="{StaticResource RowOutline}" Command="{x:Bind Vm.CopyMcpPathCommand}" HorizontalAlignment="Left"
+                                                Visibility="{x:Bind Vm.HasMcpPath}" CornerRadius="{Binding Control, Source={StaticResource Shape}}">
+                                            <StackPanel Orientation="Horizontal" Spacing="8">
+                                                <FontIcon Glyph="&#xE8C8;" FontSize="13" />
+                                                <TextBlock Text="Скопировать путь" />
+                                            </StackPanel>
+                                        </Button>
+                                    </StackPanel>
+                                </Border>
+                            </StackPanel>
+                            <Grid ColumnDefinitions="Auto,*" ColumnSpacing="12" Padding="14,12" Background="{StaticResource XSunken}" CornerRadius="{Binding Card, Source={StaticResource Shape}}">
+                                <TextBlock Text="i" Style="{StaticResource MonoValue}" FontSize="12" Foreground="{StaticResource XMuted}" VerticalAlignment="Top" />
+                                <TextBlock Grid.Column="1" Style="{StaticResource RowHint}" FontSize="13"
+                                           Text="Через Claude можно играть звуки, назначать клавиши, записывать и обрезать — пока Xoard запущен." />
+                            </Grid>
+                        </StackPanel>
+                    </Grid>
+                </ScrollViewer>
+            </Grid>
+        </Grid>
+    </Border>
 </UserControl>

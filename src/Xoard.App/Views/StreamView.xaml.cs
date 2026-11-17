@@ -18,12 +18,10 @@ public sealed partial class StreamView : UserControl
         ApplyAnimationSetting();
         Loaded += (_, _) =>
         {
-            Vm.LiveWaveUpdated += OnLiveWave;
             Vm.PropertyChanged += OnVmChanged;
         };
         Unloaded += (_, _) =>
         {
-            Vm.LiveWaveUpdated -= OnLiveWave;
             Vm.PropertyChanged -= OnVmChanged;
         };
     }
@@ -35,8 +33,6 @@ public sealed partial class StreamView : UserControl
         if (e.PropertyName == nameof(MainViewModel.AnimationsEnabled))
             ApplyAnimationSetting();
     }
-
-    private void OnLiveWave(float[] peaks) => LiveWave.SetPeaks(peaks);
 
     private void OnSoundClick(object sender, ItemClickEventArgs e)
     {

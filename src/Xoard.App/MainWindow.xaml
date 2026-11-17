@@ -48,10 +48,17 @@
             </StackPanel>
         </Border>
 
-        <!-- Настройки: затемнение и панель справа -->
+        <!-- Настройки: затемнение и окно по центру (разделы слева) -->
         <Grid x:Name="SettingsLayer" Visibility="Collapsed">
             <Rectangle Fill="{StaticResource XScrim}" Tapped="OnScrimTapped" />
-            <ContentControl x:Name="SheetHost" HorizontalAlignment="Right" Width="460" HorizontalContentAlignment="Stretch" VerticalContentAlignment="Stretch" IsTabStop="False" />
+            <ContentControl x:Name="SheetHost" MaxWidth="920" MaxHeight="680" Margin="24" HorizontalAlignment="Stretch" VerticalAlignment="Stretch"
+                            HorizontalContentAlignment="Stretch" VerticalContentAlignment="Stretch" IsTabStop="False" />
+        </Grid>
+
+        <!-- Редактор клипа: новая запись или повтор (ещё не файл), обрезка звука -->
+        <Grid x:Name="EditorLayer" Visibility="Collapsed">
+            <Rectangle Fill="{StaticResource XScrim}" />
+            <ContentControl x:Name="EditorHost" HorizontalAlignment="Stretch" VerticalAlignment="Center" HorizontalContentAlignment="Stretch" IsTabStop="False" />
         </Grid>
 
         <!-- ═══ Подсказка: VB-CABLE и Discord (проверки обновляются, пока окно открыто) ═══ -->

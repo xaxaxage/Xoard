@@ -42,10 +42,10 @@ public sealed class XoardTools(ControlClient client)
 
     [McpServerTool(Name = "set_volume")]
     [Description("Set a volume slider. target: \"headphones\" (sounds in the user's headphones), " +
-                 "\"cable\" (sounds that friends hear), \"mic\" (the user's own voice sent to friends). percent: 0-100.")]
+                 "\"cable\" (sounds that friends hear), \"mic\" (the user's own voice sent to friends). percent: 0-200, 100 = normal (no boost), above 100 boosts.")]
     public Task<string> SetVolume(
         [Description("headphones, cable or mic")] string target,
-        [Description("Volume in percent, 0-100.")] double percent,
+        [Description("Volume in percent, 0-200 (100 = normal).")] double percent,
         CancellationToken cancellationToken = default) =>
         CallAsync(ControlCommands.SetVolume, new SetVolumeArgs(target, percent), cancellationToken);
 

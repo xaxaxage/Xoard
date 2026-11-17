@@ -111,7 +111,7 @@ public sealed class ControlException : Exception
 /// <summary>Аргументы play_sound: имя (точное или часть) или id (имя файла).</summary>
 public sealed record PlaySoundArgs(string? Name = null, string? Id = null, bool PreviewOnly = false);
 
-/// <summary>Аргументы set_volume: target = headphones | cable | mic, percent = 0..100.</summary>
+/// <summary>Аргументы set_volume: target = headphones | cable | mic, percent = 0..200 (100 — без усиления).</summary>
 public sealed record SetVolumeArgs(string Target, double Percent);
 
 /// <summary>Звук.</summary>
@@ -123,7 +123,7 @@ public sealed record SoundList(IReadOnlyList<SoundInfo> Sounds);
 /// <summary>Результат play_sound.</summary>
 public sealed record PlayInfo(string Id, string Name, double DurationSeconds, bool PreviewOnly);
 
-/// <summary>Громкости, проценты 0..100.</summary>
+/// <summary>Громкости, проценты 0..200 (100 — без усиления).</summary>
 public sealed record VolumeInfo(double Headphones, double Cable, double Mic, bool MicMuted);
 
 /// <summary>Устройство вывода в статусе.</summary>

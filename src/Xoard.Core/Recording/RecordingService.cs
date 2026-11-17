@@ -48,7 +48,9 @@ public sealed class RecordingService : IAsyncDisposable
 
     // Живая волна повтора: пик каждых 50 мс за последние 2 минуты
     private readonly PeakHistory livePeaks = new((int)(120 / LivePeakSeconds));
+    private readonly PeakHistory liveRms = new((int)(120 / LivePeakSeconds));
     private float liveMax;
+    private double liveSumSquares;
     private int liveFrames;
 
     // Текущая запись
@@ -81,6 +83,25 @@ public sealed class RecordingService : IAsyncDisposable
     /// Пока повтор выключен, волна пустая. Возвращает, сколько отрезков настоящих.
     /// </summary>
     public int CopyLivePeaks(Span<float> dest) => livePeaks.CopyLatest(dest);
+
+    /// <summary>Средняя громкость (RMS, 0..1) тех же отрезков — для «плотной» части волны, как в аудиоредакторе.</summary>
+    public int CopyLiveRms(Span<float> dest) => liveRms.CopyLatest(dest);
+
+    /// <summary>Сколько отрезков живой волны записано за всё время: изменилось — пришёл новый (для плавной прокрутки).</summary>
+    public long LiveBucketsWritten => livePeaks.Written;
+
+    /// <summary>
+    /// Досыпать тишину за время без звука: в тишине Windows не присылает пакетов, и без этого живая
+    /// волна стояла бы на месте, а потом прыгала. Вызывать часто (каждый кадр) — дёшево.
+    /// </summary>
+    public void CatchUpSilence()
+    {
+        lock (gate)
+        {
+            if (systemRecorder is not null && ring is not null)
+                PadSilenceToNow();
+        }
+    }
 
     /// <summary>Последняя ошибка (по-русски) или null.</summary>
     public string? LastError { get; private set; }
@@ -160,6 +181,7 @@ public sealed class RecordingService : IAsyncDisposable
 
             if (!enabled)
                 livePeaks.Clear();
+                liveRms.Clear();
 
             replaySeconds = seconds;
         }
@@ -207,6 +229,20 @@ public sealed class RecordingService : IAsyncDisposable
     /// Остановить запись и сохранить WAV в папку. Возвращает путь или null, если записалось меньше 0,2 с.
     /// </summary>
     public async Task<string?> StopRecordingAsync(string folder, string? name)
+    {
+        var clip = await StopRecordingClipAsync().ConfigureAwait(false);
+        if (clip is null)
+            return null;
+        var path = AudioClips.UniqueWavPath(folder, name ?? clip.SuggestedName);
+        await Task.Run(() => AudioClips.WriteWav(path, clip.Stereo, AudioFormat.SampleRate)).ConfigureAwait(false);
+        return path;
+    }
+
+    /// <summary>
+    /// Остановить запись и отдать её в памяти (48 кГц), без файла — для редактора клипа.
+    /// null — записалось меньше 0,2 с.
+    /// </summary>
+    public async Task<AudioClip?> StopRecordingClipAsync()
     {
         RecordingSource? source;
         WasapiRecorder? mic;
@@ -257,14 +293,23 @@ public sealed class RecordingService : IAsyncDisposable
         if (rate == 0 || samples.Length < rate / 5 * 2)
             return null;
 
-        var path = UniquePath(folder, name ?? $"Запись {DateTime.Now:HH-mm-ss}");
-        await Task.Run(() => AudioClips.WriteWav(path, samples, rate)).ConfigureAwait(false);
-        return path;
+        var normalized = await Task.Run(() => AudioClips.ToInternalRate(samples, rate)).ConfigureAwait(false);
+        return new AudioClip(normalized, $"Запись {DateTime.Now:HH-mm-ss}");
     }
 
     /// <summary>Сохранить последние <paramref name="seconds"/> секунд повтора как WAV.</summary>
     /// <exception cref="InvalidOperationException">Повтор выключен или буфер пуст.</exception>
     public async Task<string> SaveReplayAsync(double seconds, string folder, string? name)
+    {
+        var clip = await TakeReplayClipAsync(seconds).ConfigureAwait(false);
+        var path = AudioClips.UniqueWavPath(folder, name ?? clip.SuggestedName);
+        await Task.Run(() => AudioClips.WriteWav(path, clip.Stereo, AudioFormat.SampleRate)).ConfigureAwait(false);
+        return path;
+    }
+
+    /// <summary>Последние <paramref name="seconds"/> секунд повтора в памяти (48 кГц), без файла — для редактора клипа.</summary>
+    /// <exception cref="InvalidOperationException">Повтор выключен или буфер пуст.</exception>
+    public async Task<AudioClip> TakeReplayClipAsync(double seconds)
     {
         float[] samples;
         int rate;
@@ -287,9 +332,8 @@ public sealed class RecordingService : IAsyncDisposable
                 Array.Copy(ring, 0, samples, first * 2, (frames - first) * 2);
         }
 
-        var path = UniquePath(folder, name ?? $"Повтор {DateTime.Now:HH-mm-ss}");
-        await Task.Run(() => AudioClips.WriteWav(path, samples, rate)).ConfigureAwait(false);
-        return path;
+        var normalized = await Task.Run(() => AudioClips.ToInternalRate(samples, rate)).ConfigureAwait(false);
+        return new AudioClip(normalized, $"Повтор {DateTime.Now:HH-mm-ss}");
     }
 
     public async ValueTask DisposeAsync()
@@ -478,10 +522,13 @@ public sealed class RecordingService : IAsyncDisposable
             var v = Math.Max(Math.Abs(stereo[i]), Math.Abs(stereo[i + 1]));
             if (v > liveMax)
                 liveMax = v;
+            liveSumSquares += ((stereo[i] * stereo[i]) + (stereo[i + 1] * stereo[i + 1])) * 0.5;
             if (++liveFrames >= bucket)
             {
                 livePeaks.Add(Math.Min(1f, liveMax));
+                liveRms.Add((float)Math.Min(1.0, Math.Sqrt(liveSumSquares / liveFrames)));
                 liveMax = 0;
+                liveSumSquares = 0;
                 liveFrames = 0;
             }
         }
@@ -571,16 +618,6 @@ public sealed class RecordingService : IAsyncDisposable
             convertScratch = new float[frames * 2];
     }
 
-    private static string UniquePath(string folder, string name)
-    {
-        Directory.CreateDirectory(folder);
-        foreach (var c in Path.GetInvalidFileNameChars())
-            name = name.Replace(c, '-');
-        var candidate = Path.Combine(folder, name + ".wav");
-        for (var i = 2; File.Exists(candidate); i++)
-            candidate = Path.Combine(folder, $"{name} ({i}).wav");
-        return candidate;
-    }
 }
 
 /// <summary>Байты захвата (float32 / PCM 16/24/32, любые каналы) → стерео float.</summary>

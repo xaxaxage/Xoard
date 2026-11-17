@@ -36,14 +36,25 @@ public sealed record HotkeyTarget(HotkeyKind Kind, SoundItem? Sound = null)
     };
 }
 
+/// <summary>
+/// Клип для редактора: новая запись или повтор (ещё не файл) либо звук, который обрезают
+/// (<paramref name="TrimTarget"/>).
+/// </summary>
+public sealed record ClipDraft(AudioClip Clip, SoundItem? TrimTarget, string Title, string Subtitle)
+{
+    public bool IsTrim => TrimTarget is not null;
+}
+
 /// <summary>Запись, повтор и обрезка.</summary>
 public sealed partial class MainViewModel
 {
     private readonly RecordingService recorder = new();
     private bool recordingBusy;
 
-    /// <summary>Открыть редактор обрезки (после записи из окна или из меню плитки).</summary>
-    public event Action<SoundItem>? TrimRequested;
+    private Xoard.Core.Audio.Sounds.SoundHandle? previewHandle;
+
+    /// <summary>Открыть редактор клипа: новая запись или повтор (ещё не файл) либо обрезка звука.</summary>
+    public event Action<ClipDraft>? ClipEditRequested;
 
     [ObservableProperty]
     public partial bool IsRecording { get; set; }
@@ -142,7 +153,10 @@ public sealed partial class MainViewModel
     [RelayCommand]
     private Task<SoundItem?> SaveReplay() => SaveReplayAsync(fromHotkey: false);
 
-    /// <summary>Начать или остановить запись. После остановки из окна — сразу редактор обрезки.</summary>
+    /// <summary>
+    /// Начать или остановить запись. Из окна после остановки открывается редактор клипа (файла ещё нет);
+    /// по клавише (в игре) запись сразу сохраняется.
+    /// </summary>
     public async Task<SoundItem?> ToggleRecordingAsync(bool fromHotkey, string? name = null)
     {
         if (recordingBusy)
@@ -160,6 +174,21 @@ public sealed partial class MainViewModel
                 return null;
             }
 
+            if (!fromHotkey)
+            {
+                var source = recorder.Recording == RecordingSource.Microphone ? "Микрофон" : "Звук компьютера";
+                var clip = await recorder.StopRecordingClipAsync().ConfigureAwait(true);
+                IsRecording = false;
+                if (clip is null)
+                {
+                    ShowToast("Запись слишком короткая — ничего не сохранено.", InfoBarSeverity.Warning);
+                    return null;
+                }
+
+                ClipEditRequested?.Invoke(new ClipDraft(clip, null, "Новая запись", $"{source} · {Clock(clip.Seconds)}"));
+                return null;
+            }
+
             var path = await recorder.StopRecordingAsync(library.Folder, name).ConfigureAwait(true);
             IsRecording = false;
             if (path is null)
@@ -169,7 +198,7 @@ public sealed partial class MainViewModel
             }
 
             var item = AddRecordedFile(path);
-            AfterSaved(item, fromHotkey, "Запись сохранена");
+            ShowToast($"Запись сохранена: «{item.Name}».", InfoBarSeverity.Success);
             return item;
         }
         catch (InvalidOperationException ex)
@@ -184,14 +213,23 @@ public sealed partial class MainViewModel
         }
     }
 
-    /// <summary>Сохранить последние N секунд повтора как новый звук.</summary>
+    /// <summary>
+    /// Последние N секунд повтора: из окна — в редактор клипа (файла ещё нет), по клавише — сразу новым звуком.
+    /// </summary>
     public async Task<SoundItem?> SaveReplayAsync(bool fromHotkey, double? seconds = null, string? name = null)
     {
         try
         {
+            if (!fromHotkey)
+            {
+                var clip = await recorder.TakeReplayClipAsync(seconds ?? ReplaySeconds).ConfigureAwait(true);
+                ClipEditRequested?.Invoke(new ClipDraft(clip, null, "Повтор", $"Звук компьютера · последние {Clock(clip.Seconds)}"));
+                return null;
+            }
+
             var path = await recorder.SaveReplayAsync(seconds ?? ReplaySeconds, library.Folder, name).ConfigureAwait(true);
             var item = AddRecordedFile(path);
-            AfterSaved(item, fromHotkey, "Повтор сохранён");
+            ShowToast($"Повтор сохранён: «{item.Name}».", InfoBarSeverity.Success);
             return item;
         }
         catch (InvalidOperationException ex)
@@ -199,13 +237,6 @@ public sealed partial class MainViewModel
             ShowToast(ex.Message, InfoBarSeverity.Warning);
             return null;
         }
-    }
-
-    private void AfterSaved(SoundItem item, bool fromHotkey, string what)
-    {
-        ShowToast($"{what}: «{item.Name}».", InfoBarSeverity.Success);
-        if (!fromHotkey)
-            TrimRequested?.Invoke(item);   // из окна — сразу обрезать; по клавише (в игре) — не мешаем
     }
 
     /// <summary>Файл уже в папке звуков — добавить плитку и загрузить.</summary>
@@ -222,21 +253,58 @@ public sealed partial class MainViewModel
         return item;
     }
 
-    public void RequestTrim(SoundItem item) => TrimRequested?.Invoke(item);
-
-    /// <summary>Звук для редактора: декодированные сэмплы (48 кГц, стерео).</summary>
-    public Task<DecodedSound> DecodeForEditorAsync(SoundItem item) =>
-        SoundDecoder.DecodeAsync(item.File.Path);
-
-    /// <summary>Прослушать кусок в наушниках (только себе).</summary>
-    public void PreviewSlice(DecodedSound sound, double start, double end)
+    /// <summary>Обрезать звук: открыть его в редакторе клипа.</summary>
+    public async void RequestTrim(SoundItem item)
     {
-        var slice = AudioClips.Slice(sound.Samples, start, end);
-        if (slice.Length == 0)
-            return;
-        var handle = engine.AddSound("предпрослушивание", DecodedSound.FromSamples(slice));
-        engine.Play(handle, new Xoard.Core.Audio.PlayOptions(Outputs: Xoard.Core.Audio.OutputMask.Headphones));
+        try
+        {
+            var sound = await SoundDecoder.DecodeAsync(item.File.Path).ConfigureAwait(true);
+            ClipEditRequested?.Invoke(new ClipDraft(new AudioClip(sound.Samples, item.Name), item, "Обрезка", $"{item.Name} · {Clock(sound.Duration.TotalSeconds)}"));
+        }
+        catch (Exception ex) when (ex is SoundLoadException or IOException or UnauthorizedAccessException)
+        {
+            ShowToast(ex.Message, InfoBarSeverity.Error);
+        }
     }
+
+    /// <summary>Сохранить клип (весь или кусок [start, end)) новым звуком. Возвращает текст ошибки или null.</summary>
+    public async Task<string?> SaveClipAsync(ClipDraft draft, string name, double start, double end)
+    {
+        try
+        {
+            var folder = library.Folder;
+            var path = await Task.Run(() => draft.Clip.SaveAs(folder, name, start, end)).ConfigureAwait(true);
+            var item = AddRecordedFile(path);
+            ShowToast($"Сохранено: «{item.Name}».", InfoBarSeverity.Success);
+            return null;
+        }
+        catch (Exception ex) when (ex is ArgumentException or IOException or UnauthorizedAccessException)
+        {
+            return ex.Message;
+        }
+    }
+
+    /// <summary>Прослушать кусок клипа в наушниках (только себе); предыдущее прослушивание останавливается.</summary>
+    public void PreviewClip(AudioClip clip, double start, double end)
+    {
+        StopPreview();
+        var slice = AudioClips.Slice(clip.Stereo, start, end);
+        if (slice.Length == 0 || !engineRunning)
+            return;
+        previewHandle = engine.AddSound("предпрослушивание", DecodedSound.FromSamples(slice));
+        engine.Play(previewHandle, new Xoard.Core.Audio.PlayOptions(Outputs: Xoard.Core.Audio.OutputMask.Headphones));
+    }
+
+    public void StopPreview()
+    {
+        if (previewHandle is not null)
+            engine.StopSound(previewHandle);
+        previewHandle = null;
+    }
+
+    /// <summary>«0:12.4» для подписей.</summary>
+    private static string Clock(double seconds) =>
+        $"{(int)(seconds / 60)}:{seconds % 60:00.0}".Replace(',', '.');
 
     /// <summary>
     /// Обрезать звук до [start, end) секунд: новый WAV вместо файла, оригинал — в корзину.

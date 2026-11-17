@@ -25,8 +25,11 @@ internal static class Motion
         visual.StartAnimation("Scale", animation);
     }
 
-    /// <summary>Панель выезжает справа (0,22 с) — или просто появляется, если анимации выключены.</summary>
-    public static void SlideIn(UIElement element, bool animate)
+    /// <summary>
+    /// Панель въезжает со сдвига (<paramref name="dx"/>, <paramref name="dy"/>) за 0,22 с — по умолчанию справа —
+    /// или просто появляется, если анимации выключены.
+    /// </summary>
+    public static void SlideIn(UIElement element, bool animate, float dx = 36, float dy = 0)
     {
         var visual = ElementCompositionPreview.GetElementVisual(element);
         if (!animate)
@@ -39,7 +42,7 @@ internal static class Motion
         var compositor = visual.Compositor;
         var ease = compositor.CreateCubicBezierEasingFunction(new Vector2(0.2f, 0.8f), new Vector2(0.2f, 1f));
         var offset = compositor.CreateVector3KeyFrameAnimation();
-        offset.InsertKeyFrame(0f, new Vector3(36, 0, 0));
+        offset.InsertKeyFrame(0f, new Vector3(dx, dy, 0));
         offset.InsertKeyFrame(1f, Vector3.Zero, ease);
         offset.Duration = TimeSpan.FromMilliseconds(220);
         var fade = compositor.CreateScalarKeyFrameAnimation();

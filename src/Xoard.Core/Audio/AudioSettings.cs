@@ -55,13 +55,13 @@ public sealed record AudioSettings
     /// <summary>Как многоканальный микрофон сводится в моно.</summary>
     public MicChannelMode MicChannelMode { get; init; } = MicChannelMode.Average;
 
-    /// <summary>Громкость в наушниках, положение ползунка 0..1 (кубическая кривая, 1 = 0 дБ).</summary>
-    public float HeadphonesLevel { get; init; } = 0.8f;
+    /// <summary>Громкость в наушниках, положение ползунка 0..2 (1 = 100 % = 0 дБ, 2 = 200 % ≈ +12 дБ).</summary>
+    public float HeadphonesLevel { get; init; } = 1f;
 
-    /// <summary>Громкость звуков в VB-CABLE (то, что слышат друзья), 0..1.</summary>
+    /// <summary>Громкость звуков в VB-CABLE (то, что слышат друзья), 0..2.</summary>
     public float CableLevel { get; init; } = 1f;
 
-    /// <summary>Громкость голоса в VB-CABLE, 0..1.</summary>
+    /// <summary>Громкость голоса в VB-CABLE, 0..2.</summary>
     public float MicLevel { get; init; } = 1f;
 
     /// <summary>Наложение или перезапуск при повторном нажатии.</summary>
@@ -96,8 +96,8 @@ public sealed record AudioSettings
     private static void ValidateLevel(float value, string name)
     {
         // NaN не проходит ни одно сравнение, поэтому проверка записана «от противного».
-        if (!(value >= 0f && value <= 1f))
-            throw new ArgumentOutOfRangeException(name, value, "Уровень должен быть в диапазоне 0..1.");
+        if (!(value >= 0f && value <= 2f))
+            throw new ArgumentOutOfRangeException(name, value, "Уровень должен быть в диапазоне 0..2 (0–200 %).");
     }
 
     private static void ValidateEnum<T>(T value, string name) where T : struct, Enum

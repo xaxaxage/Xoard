@@ -54,8 +54,8 @@ public sealed partial class MainViewModel : IXoardControl
 
     public Task<VolumeInfo> SetVolumeAsync(SetVolumeArgs args, CancellationToken ct) => OnUi(() =>
     {
-        if (double.IsNaN(args.Percent) || args.Percent < 0 || args.Percent > 100)
-            throw new ControlException(ControlErrorCodes.BadRequest, "percent должен быть от 0 до 100.");
+        if (double.IsNaN(args.Percent) || args.Percent < 0 || args.Percent > 200)
+            throw new ControlException(ControlErrorCodes.BadRequest, "percent должен быть от 0 до 200 (100 — без усиления).");
 
         switch ((args.Target ?? "").Trim().ToLowerInvariant())
         {

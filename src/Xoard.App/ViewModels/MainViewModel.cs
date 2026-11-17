@@ -34,7 +34,8 @@ public sealed partial class MainViewModel : ObservableObject, IAsyncDisposable
 {
     private readonly DispatcherQueue dispatcher;
     private readonly ConfigStore store;
-    private readonly SoundLibrary library;
+    private SoundLibrary library;
+    private readonly string defaultSoundsFolder;
     private readonly AudioEngine engine;
     private readonly DispatcherQueueTimer meterTimer;
     private readonly DispatcherQueueTimer saveTimer;
@@ -60,7 +61,8 @@ public sealed partial class MainViewModel : ObservableObject, IAsyncDisposable
         var (settingsPath, soundsFolder) = ResolveDataPaths();
         store = new ConfigStore(settingsPath);
         config = store.Load();
-        library = new SoundLibrary(soundsFolder, new WindowsRecycleBin());
+        defaultSoundsFolder = soundsFolder;
+        library = new SoundLibrary(config.SoundsFolder ?? soundsFolder, new WindowsRecycleBin());
         engine = new AudioEngine(AudioEngineOptions.For(config.Audio.LatencyProfile));
 
         engine.StatusChanged += (_, s) => dispatcher.TryEnqueue(() => ApplyStatus(s));
@@ -759,7 +761,7 @@ public sealed partial class MainViewModel : ObservableObject, IAsyncDisposable
 
     private void SetLevel(LevelTarget target, double percent)
     {
-        var level = (float)Math.Clamp(percent / 100.0, 0, 1);
+        var level = (float)Math.Clamp(percent / 100.0, 0, 2);
         engine.SetLevel(target, level);
         UpdateAudio(a => target switch
         {
@@ -894,7 +896,6 @@ public sealed partial class MainViewModel : ObservableObject, IAsyncDisposable
     {
         UpdateRecordingUi();
         TickSetupChecks();
-        UpdateLiveWave();
         if (!engineRunning)
             return;
         var m = engine.ReadMeters();

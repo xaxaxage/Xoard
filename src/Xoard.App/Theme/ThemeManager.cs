@@ -24,6 +24,10 @@ public sealed partial class ShapeTokens : ObservableObject
     [ObservableProperty]
     public partial CornerRadius Sheet { get; set; }
 
+    /// <summary>Левый край окна (колонка разделов в настройках): скругление только слева, на пиксель меньше рамки.</summary>
+    [ObservableProperty]
+    public partial CornerRadius SheetStart { get; set; }
+
     [ObservableProperty]
     public partial CornerRadius Control { get; set; }
 
@@ -45,6 +49,7 @@ public sealed partial class ShapeTokens : ObservableObject
         IsSoft = soft;
         Card = new CornerRadius(soft ? 18 : 6);
         Sheet = new CornerRadius(soft ? 24 : 10);
+        SheetStart = soft ? new CornerRadius(23, 0, 0, 23) : new CornerRadius(9, 0, 0, 9);
         Control = new CornerRadius(soft ? 12 : 6);
         Inner = new CornerRadius(soft ? 9 : 4);
         Chip = new CornerRadius(soft ? 8 : 3);

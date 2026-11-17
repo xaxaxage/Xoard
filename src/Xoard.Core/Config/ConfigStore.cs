@@ -10,8 +10,11 @@ public sealed record WindowPlacement(int X, int Y, int Width, int Height, bool M
 /// <summary>Все настройки приложения (то, что сохраняется в settings.json).</summary>
 public sealed record AppConfig
 {
-    /// <summary>Версия формата файла.</summary>
-    public int Version { get; init; } = 1;
+    /// <summary>Версия формата файла (2 — палитра по умолчанию стала «xoard»).</summary>
+    public int Version { get; init; } = CurrentVersion;
+
+    /// <summary>Текущая версия формата.</summary>
+    public const int CurrentVersion = 2;
 
     /// <summary>Звук: устройства, громкости, режимы.</summary>
     public AudioSettings Audio { get; init; } = AudioSettings.Default;
@@ -43,8 +46,11 @@ public sealed record AppConfig
     /// <summary>Анимации интерфейса (выключаются и при отключённых анимациях Windows).</summary>
     public bool AnimationsEnabled { get; init; } = true;
 
-    /// <summary>Палитра: auto (по теме Windows), xoard, xoard-night, harbor, … (см. Palettes в приложении).</summary>
-    public string Palette { get; init; } = "auto";
+    /// <summary>Палитра: xoard (жёлтая, по умолчанию), xoard-night, auto (по теме Windows), harbor, … (см. Palettes в приложении).</summary>
+    public string Palette { get; init; } = "xoard";
+
+    /// <summary>Своя папка звуков (null — «ДокументыXoardSounds»).</summary>
+    public string? SoundsFolder { get; init; }
 
     /// <summary>Форма: strict (почти прямые углы, тонкие линии) или soft (скруглённые карточки).</summary>
     public string Shape { get; init; } = "strict";
@@ -54,9 +60,6 @@ public sealed record AppConfig
 
     /// <summary>Сама проверять, не вышла ли новая версия (скачивается и ставится только по кнопке).</summary>
     public bool CheckForUpdates { get; init; } = true;
-
-    /// <summary>Шутливые подписи под заголовком и в уведомлениях.</summary>
-    public bool HumorEnabled { get; init; } = true;
 
     /// <summary>Кнопка ✕ прячет окно в трей (программа продолжает работать), а не закрывает её.</summary>
     public bool CloseToTray { get; init; } = true;
@@ -116,6 +119,9 @@ public sealed class ConfigStore
                 var json = File.ReadAllText(Path);
                 var config = JsonSerializer.Deserialize<AppConfig>(json, Options) ?? new AppConfig();
                 config.Audio.Validate();
+                // Формат 1: палитра по умолчанию была «авто» — теперь жёлтая Xoard
+                if (config.Version < 2)
+                    config = config with { Version = AppConfig.CurrentVersion, Palette = config.Palette == "auto" ? "xoard" : config.Palette };
                 return config with
                 {
                     SoundOrder = config.SoundOrder ?? [],

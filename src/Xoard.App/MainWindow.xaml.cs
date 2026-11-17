@@ -42,10 +42,11 @@ public sealed partial class MainWindow : Window
         Vm = new MainViewModel(DispatcherQueue);
         Vm.RenameRequested += item => _ = RenameAsync(item);
         Vm.HotkeyRequested += target => _ = AssignHotkeyAsync(target);
-        Vm.TrimRequested += item => _ = TrimAsync(item);
+        Vm.ClipEditRequested += ShowClipEditor;
         Vm.SetupGuideRequested += () => _ = ShowSetupGuideAsync();
         Vm.AddSoundsRequested += () => _ = PickSoundsAsync();
         Vm.UpdateReadyToApply += () => _ = ExitForUpdateAsync();
+        Vm.SoundsFolderChangeRequested += folder => _ = ChangeSoundsFolderAsync(folder);
 
         // Раскладка и настройки; цвета — из палитры (тема Windows только для стандартных мелочей)
         ShowBoard();
@@ -139,7 +140,22 @@ public sealed partial class MainWindow : Window
     {
         SettingsLayer.Visibility = open ? Visibility.Visible : Visibility.Collapsed;
         if (open)
-            Views.Motion.SlideIn(SheetHost, AnimationsOn);
+            Views.Motion.SlideIn(SheetHost, AnimationsOn, dx: 0, dy: 14);
+    }
+
+    /// <summary>Редактор клипа поверх окна (новая запись или повтор, обрезка).</summary>
+    private void ShowClipEditor(ClipDraft draft)
+    {
+        Vm.SettingsOpen = false;
+        if (!shown)
+            ShowFromTray();
+        EditorHost.Content = new Views.ClipEditor(Vm, draft, () =>
+        {
+            EditorLayer.Visibility = Visibility.Collapsed;
+            EditorHost.Content = null;
+        });
+        EditorLayer.Visibility = Visibility.Visible;
+        Views.Motion.SlideIn(EditorHost, AnimationsOn);
     }
 
     private void OnScrimTapped(object sender, Microsoft.UI.Xaml.Input.TappedRoutedEventArgs e) => Vm.SettingsOpen = false;
@@ -148,11 +164,65 @@ public sealed partial class MainWindow : Window
 
     private void OnRootKeyDown(object sender, Microsoft.UI.Xaml.Input.KeyRoutedEventArgs e)
     {
+        if (e.Key == Windows.System.VirtualKey.Escape && EditorHost.Content is Views.ClipEditor editor)
+        {
+            if (editor.CanCancelWithEscape)
+                editor.Cancel();
+            e.Handled = true;
+            return;
+        }
+
         if (e.Key == Windows.System.VirtualKey.Escape && Vm.SettingsOpen)
         {
             Vm.SettingsOpen = false;
             e.Handled = true;
         }
+    }
+
+    /// <summary>Сменить папку звуков: выбрать (если не задана), спросить про перенос, сменить.</summary>
+    private async Task ChangeSoundsFolderAsync(string? folder)
+    {
+        if (folder is null)
+        {
+            var picker = new FolderPicker { SuggestedStartLocation = PickerLocationId.DocumentsLibrary };
+            picker.FileTypeFilter.Add("*");
+            WinRT.Interop.InitializeWithWindow.Initialize(picker, WinRT.Interop.WindowNative.GetWindowHandle(this));
+            var picked = await picker.PickSingleFolderAsync();
+            if (picked is null)
+                return;
+            folder = picked.Path;
+        }
+
+        if (Vm.IsCurrentSoundsFolder(folder))
+            return;
+
+        var move = false;
+        if (Vm.SoundCount > 0)
+        {
+            var dialog = new ContentDialog
+            {
+                XamlRoot = Root.XamlRoot,
+                RequestedTheme = Theme.ThemeManager.Current.ElementTheme,
+                Title = "Сменить папку звуков",
+                Content = new TextBlock
+                {
+                    Text = $"Новая папка: {folder}\n\nПеренести туда звуки из старой папки ({Vm.SoundCount})? Клавиши звуков сохранятся.",
+                    TextWrapping = TextWrapping.Wrap,
+                },
+                PrimaryButtonText = "Перенести звуки",
+                SecondaryButtonText = "Только сменить папку",
+                CloseButtonText = "Отмена",
+                DefaultButton = ContentDialogButton.Primary,
+            };
+            var answer = await dialog.ShowAsync();
+            if (answer == ContentDialogResult.None)
+                return;
+            move = answer == ContentDialogResult.Primary;
+        }
+
+        var error = await Vm.ChangeSoundsFolderAsync(folder, move);
+        if (error is not null)
+            Vm.ShowToast(error, InfoBarSeverity.Error);
     }
 
     // ───────── звуки ─────────
@@ -315,154 +385,6 @@ public sealed partial class MainWindow : Window
         {
             Vm.ResumeHotkeys();
         }
-    }
-
-    /// <summary>
-    /// Обрезка: форма волны, выделение мышкой, прослушать выделенное (только себе), сохранить.
-    /// Сначала выделено всё, кроме тишины по краям.
-    /// </summary>
-    private async Task TrimAsync(SoundItem item)
-    {
-        DecodedSound sound;
-        try
-        {
-            sound = await Vm.DecodeForEditorAsync(item);
-        }
-        catch (SoundLoadException ex)
-        {
-            Vm.ShowToast(ex.Message, InfoBarSeverity.Error);
-            return;
-        }
-
-        const double width = 720;
-        const double height = 140;
-        var duration = sound.Duration.TotalSeconds;
-        if (duration <= 0)
-            return;
-
-        var peaks = AudioClips.Peaks(sound.Samples, (int)width);
-        var mid = height / 2;
-        var figure = new PathFigure { StartPoint = new Windows.Foundation.Point(0, mid), IsClosed = true, IsFilled = true };
-        for (var x = 0; x < peaks.Length; x++)
-            figure.Segments.Add(new LineSegment { Point = new Windows.Foundation.Point(x, mid - (peaks[x].Max * mid * 0.95)) });
-        for (var x = peaks.Length - 1; x >= 0; x--)
-            figure.Segments.Add(new LineSegment { Point = new Windows.Foundation.Point(x, mid - (peaks[x].Min * mid * 0.95)) });
-
-        var wave = new Microsoft.UI.Xaml.Shapes.Path
-        {
-            Data = new PathGeometry { Figures = { figure } },
-            Fill = (Brush)Application.Current.Resources["XWave"],
-        };
-        var selectionRect = new Microsoft.UI.Xaml.Shapes.Rectangle
-        {
-            Height = height,
-            Fill = (Brush)Application.Current.Resources["XPrimary"],
-            Opacity = 0.22,
-        };
-        var canvas = new Canvas
-        {
-            Width = width,
-            Height = height,
-            Background = (Brush)Application.Current.Resources["XBg"],
-            Children = { wave, selectionRect },
-        };
-
-        // Начальное выделение: без тишины по краям (с запасом 0,1 с)
-        var first = Array.FindIndex(peaks, p => Math.Max(Math.Abs(p.Min), Math.Abs(p.Max)) > 0.02f);
-        var last = Array.FindLastIndex(peaks, p => Math.Max(Math.Abs(p.Min), Math.Abs(p.Max)) > 0.02f);
-        double selStart = first < 0 ? 0 : Math.Max(0, (first / width * duration) - 0.1);
-        double selEnd = last < 0 ? duration : Math.Min(duration, ((last + 1) / width * duration) + 0.1);
-
-        var info = new TextBlock { Foreground = (Brush)Application.Current.Resources["TextFillColorSecondaryBrush"] };
-        var error = new TextBlock { Foreground = (Brush)Application.Current.Resources["SystemFillColorCriticalBrush"], TextWrapping = TextWrapping.Wrap };
-
-        void Redraw()
-        {
-            Canvas.SetLeft(selectionRect, selStart / duration * width);
-            selectionRect.Width = Math.Max(1, (selEnd - selStart) / duration * width);
-            info.Text = $"Начало {selStart:0.00} с · конец {selEnd:0.00} с · останется {selEnd - selStart:0.00} из {duration:0.00} с";
-        }
-
-        double anchor = 0;
-        var dragging = false;
-        canvas.PointerPressed += (_, e) =>
-        {
-            dragging = true;
-            canvas.CapturePointer(e.Pointer);
-            anchor = Math.Clamp(e.GetCurrentPoint(canvas).Position.X, 0, width) / width * duration;
-        };
-        canvas.PointerMoved += (_, e) =>
-        {
-            if (!dragging)
-                return;
-            var t = Math.Clamp(e.GetCurrentPoint(canvas).Position.X, 0, width) / width * duration;
-            if (Math.Abs(t - anchor) < duration / width * 2)
-                return;
-            selStart = Math.Min(anchor, t);
-            selEnd = Math.Max(anchor, t);
-            Redraw();
-        };
-        canvas.PointerReleased += (_, e) =>
-        {
-            dragging = false;
-            canvas.ReleasePointerCapture(e.Pointer);
-        };
-
-        var preview = new Button { Content = "Прослушать выделенное" };
-        preview.Click += (_, _) => Vm.PreviewSlice(sound, selStart, selEnd);
-        var reset = new Button { Content = "Выделить всё" };
-        reset.Click += (_, _) =>
-        {
-            selStart = 0;
-            selEnd = duration;
-            Redraw();
-        };
-        Redraw();
-
-        var dialog = new ContentDialog
-        {
-            XamlRoot = Root.XamlRoot,
-            RequestedTheme = Theme.ThemeManager.Current.ElementTheme,
-            Title = $"Обрезка «{item.Name}»",
-            Content = new StackPanel
-            {
-                Spacing = 10,
-                Children =
-                {
-                    new TextBlock { Text = "Выделите мышкой кусок, который нужно оставить.", TextWrapping = TextWrapping.Wrap },
-                    new Border { CornerRadius = new CornerRadius(8), Child = canvas },
-                    info,
-                    new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, Children = { preview, reset } },
-                    error,
-                },
-            },
-            PrimaryButtonText = "Сохранить обрезку",
-            CloseButtonText = "Оставить как есть",
-            DefaultButton = ContentDialogButton.Primary,
-        };
-        dialog.Resources["ContentDialogMaxWidth"] = 900.0;
-
-        dialog.PrimaryButtonClick += async (_, args) =>
-        {
-            var deferral = args.GetDeferral();
-            try
-            {
-                if (selStart <= 0.001 && selEnd >= duration - 0.001)
-                    return;   // выделено всё — нечего резать
-                var message = await Vm.TrimAsync(item, selStart, selEnd);
-                if (message is not null)
-                {
-                    error.Text = message;
-                    args.Cancel = true;
-                }
-            }
-            finally
-            {
-                deferral.Complete();
-            }
-        };
-
-        await dialog.ShowAsync();
     }
 
     private static bool IsDown(Windows.System.VirtualKey key) =>

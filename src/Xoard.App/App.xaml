@@ -12,6 +12,7 @@
             <!-- Шрифты (SIL OFL, лежат рядом с программой): Onest — текст, Geologica — заголовки и большие числа -->
             <FontFamily x:Key="XFontText">ms-appx:///Assets/Fonts/Onest.ttf#Onest</FontFamily>
             <FontFamily x:Key="XFontDisplay">ms-appx:///Assets/Fonts/Geologica.ttf#Geologica</FontFamily>
+            <FontFamily x:Key="XFontMono">ms-appx:///Assets/Fonts/JetBrainsMono.ttf#JetBrains Mono</FontFamily>
             <FontFamily x:Key="ContentControlThemeFontFamily">ms-appx:///Assets/Fonts/Onest.ttf#Onest</FontFamily>
 
             <!-- Цвета палитры. Здесь — значения Xoard; Theme/ThemeManager.cs меняет цвет этих же кистей на месте,
@@ -32,6 +33,7 @@
             <SolidColorBrush x:Key="XWave" Color="#C4BE9F" />
             <SolidColorBrush x:Key="XScrim" Color="#5C141414" />
             <SolidColorBrush x:Key="XRecording" Color="#E5484D" />
+            <SolidColorBrush x:Key="XOkDot" Color="#2F9E44" />
 
             <!-- Кнопка без системных подсветок: при наведении — лёгкий оттенок цвета текста, при нажатии чуть «проседает» -->
             <Style x:Key="XButton" TargetType="Button">
