@@ -42,8 +42,10 @@ on first start, see `src/Xoard.Core/Shell/LegacyMigration.cs`).
 - **Voice is processed in Xoard (Nov 2026).** Discord must use the «Студия» input profile (its noise suppression,
   echo cancellation and auto-gain kill sounds), which leaves the voice raw and quiet. So the mic path does it
   itself, before mixing with sounds: RNNoise 0.2 (native `rnnoise.dll` in `src/Xoard.Core/Native`), auto-level
-  to −18 dBFS speech at 100 % (`VoiceProcessor`), its own −1 dBFS limiter after the slider. Two switches in
-  settings, both on. The DLL is built **locally with portable Zig** by `Native/build-rnnoise.cmd` — not GitHub
+  to −18 dBFS speech at 100 % (`VoiceProcessor`), its own −1 dBFS limiter after the slider, and a **pause gate** (the user heard breathing and keyboard): RNNoise's
+  speech probability, opening only when ≥2 of 5 frames are ≥ 0.85 (measured: speech stays above for dozens of frames,
+  clicks and breaths are 1–2 frame spikes), 30 ms look-ahead so word starts survive, 200 ms hold, 80 ms release.
+  Three switches in settings (Убирать шум, Глушить паузы, Выравнивать громкость), all on. Voice delay 50 ms. The DLL is built **locally with portable Zig** by `Native/build-rnnoise.cmd` — not GitHub
   Actions: the user's `gh` login has no `workflow` scope (they declined it), so never add workflow files.
 - **Recording and replay are multi-track (Nov 2026, the user's request).** Three tracks on one timeline
   (`Recording/TrackTimeline`, 16-bit): **Discord**, **Игра** = everything else the PC plays except Discord and

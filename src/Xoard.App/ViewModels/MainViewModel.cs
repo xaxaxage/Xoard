@@ -92,6 +92,7 @@ public sealed partial class MainViewModel : ObservableObject, IAsyncDisposable
         PassthroughEnabled = a.MicPassthroughEnabled;
         VoiceNoiseSuppression = a.VoiceNoiseSuppression;
         VoiceAutoLevel = a.VoiceAutoLevel;
+        VoiceGate = a.VoiceGate;
         ModeIndex = a.PlaybackMode == PlaybackMode.Restart ? 1 : 0;
         LatencyIndex = (int)a.LatencyProfile;
         MicChannelIndex = (int)a.MicChannelMode;
@@ -176,6 +177,10 @@ public sealed partial class MainViewModel : ObservableObject, IAsyncDisposable
     /// <summary>Выравнивать громкость голоса: 100 % — обычная громкость речи.</summary>
     [ObservableProperty]
     public partial bool VoiceAutoLevel { get; set; }
+
+    /// <summary>Глушить паузы: между фразами — тишина, без дыхания и клавиатуры.</summary>
+    [ObservableProperty]
+    public partial bool VoiceGate { get; set; }
 
     /// <summary>Подсказка к «Убирать шум» (или почему шумоподавление не работает).</summary>
     [ObservableProperty]
@@ -749,6 +754,12 @@ public sealed partial class MainViewModel : ObservableObject, IAsyncDisposable
     {
         if (!suppressSettings)
             UpdateAudio(a => a with { VoiceAutoLevel = value }, apply: true);
+    }
+
+    partial void OnVoiceGateChanged(bool value)
+    {
+        if (!suppressSettings)
+            UpdateAudio(a => a with { VoiceGate = value }, apply: true);
     }
 
     partial void OnLatencyIndexChanged(int value)

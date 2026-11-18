@@ -130,7 +130,7 @@ internal sealed class MicPassthrough
     public float VoiceGainDb => voice.GainDb;
 
     /// <summary>Шумоподавление и выравнивание громкости голоса. Можно звать с любого потока.</summary>
-    public void SetVoiceProcessing(bool noiseSuppression, bool autoLevel) => voice.Configure(noiseSuppression, autoLevel);
+    public void SetVoiceProcessing(bool noiseSuppression, bool autoLevel, bool gatePauses) => voice.Configure(noiseSuppression, autoLevel, gatePauses);
 
     /// <summary>Кому отдавать обработанный голос для записи (null — никому). Можно менять с любого потока.</summary>
     public IVoiceTap? Tap

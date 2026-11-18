@@ -280,6 +280,14 @@
                                         </Grid>
                                         <Grid Style="{StaticResource Row}" ColumnDefinitions="*,Auto">
                                             <StackPanel VerticalAlignment="Center" Spacing="2">
+                                                <TextBlock Text="Глушить паузы" Style="{StaticResource RowTitle}" />
+                                                <TextBlock Text="Между фразами — тишина: без дыхания и клавиатуры. Начало слов не режется" Style="{StaticResource RowHint}" TextWrapping="Wrap" />
+                                            </StackPanel>
+                                            <ToggleSwitch Grid.Column="1" IsOn="{x:Bind Vm.VoiceGate, Mode=TwoWay}" OnContent="" OffContent="" MinWidth="0"
+                                                          VerticalAlignment="Center" AutomationProperties.Name="Глушить паузы" />
+                                        </Grid>
+                                        <Grid Style="{StaticResource Row}" ColumnDefinitions="*,Auto">
+                                            <StackPanel VerticalAlignment="Center" Spacing="2">
                                                 <TextBlock Text="Выравнивать громкость" Style="{StaticResource RowTitle}" />
                                                 <TextBlock Text="На 100 % голос звучит нормально с любым микрофоном, на 200 % — очень громко" Style="{StaticResource RowHint}" TextWrapping="Wrap" />
                                             </StackPanel>

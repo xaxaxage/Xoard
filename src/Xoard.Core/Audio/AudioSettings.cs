@@ -67,6 +67,9 @@ public sealed record AudioSettings
     /// <summary>Убирать шум из голоса (RNNoise). Звуки это не затрагивает.</summary>
     public bool VoiceNoiseSuppression { get; init; } = true;
 
+    /// <summary>Глушить паузы: между фразами голос уходит в тишину (без дыхания и клавиатуры).</summary>
+    public bool VoiceGate { get; init; } = true;
+
     /// <summary>Выравнивать громкость голоса по речи: на 100 % голос звучит одинаково с любым микрофоном.</summary>
     public bool VoiceAutoLevel { get; init; } = true;
 

@@ -34,6 +34,24 @@ public sealed class VoiceProcessorTests
         }
     }
 
+    /// <summary>Подавитель для проверок пауз: ничего не меняет (задерживает кадр), речь — где кадр громкий.</summary>
+    private sealed class EnergyDenoiser : IVoiceDenoiser
+    {
+        private readonly float[] previous = new float[Frame];
+
+        public float Process(ReadOnlySpan<float> input, Span<float> output)
+        {
+            previous.CopyTo(output);
+            input[..Frame].CopyTo(previous);
+            double sum = 0;
+            foreach (var x in input[..Frame])
+                sum += x * x;
+            return Math.Sqrt(sum / Frame) > 1000 ? 1f : 0f;
+        }
+
+        public void Reset() => Array.Clear(previous);
+    }
+
     /// <summary>Гонит моно-сигнал через обработку блоками неровного размера; возвращает левый канал.</summary>
     private static float[] Run(VoiceProcessor voice, Func<long, float> signal, int frames, long start = 0, Action<long>? beforeBlock = null)
     {
@@ -85,7 +103,7 @@ public sealed class VoiceProcessorTests
     public void Voice_is_delayed_by_two_frames()
     {
         var voice = new VoiceProcessor(new DelayDenoiser(speech: 0));
-        voice.Configure(noiseSuppression: true, autoLevel: false);
+        voice.Configure(noiseSuppression: true, autoLevel: false, gatePauses: false);
         voice.Reset("mic");
 
         var output = Run(voice, i => i == 1000 ? 0.5f : 0f, 4000);
@@ -98,11 +116,11 @@ public sealed class VoiceProcessorTests
     {
         // Подавитель ничего не меняет — значит, переключение не должно оставить следа
         var voice = new VoiceProcessor(new DelayDenoiser(speech: 0));
-        voice.Configure(noiseSuppression: true, autoLevel: false);
+        voice.Configure(noiseSuppression: true, autoLevel: false, gatePauses: false);
         voice.Reset("mic");
         var sine = Sine(0.3f);
 
-        var output = Run(voice, sine, Rate, beforeBlock: at => voice.Configure(noiseSuppression: at / 4410 % 2 == 0, autoLevel: false));
+        var output = Run(voice, sine, Rate, beforeBlock: at => voice.Configure(noiseSuppression: at / 4410 % 2 == 0, autoLevel: false, gatePauses: false));
         for (var i = VoiceProcessor.LatencyFrames; i < output.Length; i++)
             Assert.Equal(sine(i - VoiceProcessor.LatencyFrames), output[i], 4);
     }
@@ -111,7 +129,7 @@ public sealed class VoiceProcessorTests
     public void Noise_suppression_off_gives_original_voice()
     {
         var voice = new VoiceProcessor(new DelayDenoiser(speech: 0, cleanGain: 0.25f));
-        voice.Configure(noiseSuppression: false, autoLevel: false);
+        voice.Configure(noiseSuppression: false, autoLevel: false, gatePauses: false);
         voice.Reset("mic");
         var sine = Sine(0.3f);
 
@@ -165,7 +183,7 @@ public sealed class VoiceProcessorTests
         Run(voice, Sine(AmplitudeForRmsDb(-38)), 3 * Rate);
         Assert.True(voice.GainDb > 19);
 
-        voice.Configure(noiseSuppression: true, autoLevel: false);
+        voice.Configure(noiseSuppression: true, autoLevel: false, gatePauses: false);
         Run(voice, Sine(AmplitudeForRmsDb(-38)), Rate / 2, 3 * Rate);
         Assert.True(voice.GainDb is > 5 and < 19, $"усиление {voice.GainDb}: должно уходить плавно");
         Run(voice, Sine(AmplitudeForRmsDb(-38)), Rate, (3 * Rate) + (Rate / 2));
@@ -187,6 +205,44 @@ public sealed class VoiceProcessorTests
 
         voice.Reset("mic-b");
         Assert.Equal(0f, voice.GainDb);
+    }
+
+    /// <summary>Секунда тихого шума («дыхание»), полсекунды голоса (тон), секунда шума.</summary>
+    private static float BreathSpeechBreath(long i)
+    {
+        var noise = 0.01f * (float)Math.Sin(i * 1.7) * (float)Math.Sin(i * 0.013);
+        return i is >= Rate and < Rate + (Rate / 2) ? 0.3f * (float)Math.Sin(2 * Math.PI * 220 * i / Rate) : noise;
+    }
+
+    [Fact]
+    public void Pauses_go_silent_and_speech_opens_ahead_of_time()
+    {
+        var voice = new VoiceProcessor(new EnergyDenoiser());
+        voice.Configure(noiseSuppression: true, autoLevel: false, gatePauses: true);
+        voice.Reset("mic");
+        var latency = VoiceProcessor.LatencyFrames;
+
+        var output = Run(voice, BreathSpeechBreath, (5 * Rate) / 2);
+
+        // До речи — тишина (дыхание заглушено)
+        Assert.All(output[(Rate / 2)..(Rate - (3 * Frame) + latency)], x => Assert.Equal(0f, x));
+        // Начало слова не съедено: первые 10 мс речи — в полную силу
+        for (var k = 0; k < Frame; k++)
+            Assert.Equal(BreathSpeechBreath(Rate + k), output[Rate + latency + k], 4);
+        // После речи — удержание и уход в тишину
+        var end = Rate + (Rate / 2);
+        Assert.All(output[(end + latency + 20_000)..], x => Assert.Equal(0f, x));
+    }
+
+    [Fact]
+    public void Without_gate_pauses_pass_through()
+    {
+        var voice = new VoiceProcessor(new EnergyDenoiser());
+        voice.Configure(noiseSuppression: true, autoLevel: false, gatePauses: false);
+        voice.Reset("mic");
+
+        var output = Run(voice, BreathSpeechBreath, Rate);
+        Assert.True(output[(Rate / 2)..].Max(Math.Abs) > 0.005f);
     }
 
     [Fact]
@@ -243,6 +299,30 @@ public sealed class VoiceProcessorTests
 
         var reductionDb = 10 * Math.Log10(inPower / Math.Max(outPower, 1e-9));
         Assert.True(reductionDb > 15, $"шум ослаблен только на {reductionDb:F1} дБ");
+    }
+
+    [Fact]
+    public void Breath_like_noise_and_clicks_stay_silent_with_real_rnnoise()
+    {
+        using var rnnoise = RnNoise.TryCreate();
+        Assert.SkipWhen(rnnoise is null, $"rnnoise.dll нет: {RnNoise.LoadError}");
+
+        var voice = new VoiceProcessor(rnnoise);
+        voice.Configure(noiseSuppression: true, autoLevel: true, gatePauses: true);
+        voice.Reset("mic");
+        var random = new Random(11);
+
+        // «Дыхание»: шум по 400 мс через 400 мс тишины; «клавиатура»: щелчки 4 мс каждые 120 мс
+        float Breath(long i) => i % 38_400 < 19_200 ? (float)(random.NextDouble() - 0.5) * 0.15f * (float)Math.Sin(Math.PI * (i % 38_400) / 19_200) : 0f;
+        float Clicks(long i) => i % 5_760 < 192 ? (float)(random.NextDouble() - 0.5) * 0.8f * (1 - ((i % 5_760) / 192f)) : 0f;
+
+        var breath = Run(voice, Breath, 4 * Rate);
+        var clicks = Run(voice, Clicks, 4 * Rate, 4 * Rate);
+        var breathPeak = breath[Rate..].Max(Math.Abs);
+        var clickPeak = clicks[Rate..].Max(Math.Abs);
+        TestContext.Current.TestOutputHelper?.WriteLine($"дыхание: пик {breathPeak:0.0000}, щелчки: пик {clickPeak:0.0000}");
+        Assert.True(breathPeak < 0.01f, $"дыхание проходит: пик {breathPeak:0.0000}");
+        Assert.True(clickPeak < 0.01f, $"щелчки проходят: пик {clickPeak:0.0000}");
     }
 
     [Fact]

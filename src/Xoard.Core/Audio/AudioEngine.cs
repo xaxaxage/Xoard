@@ -839,7 +839,7 @@ public sealed class AudioEngine : IAudioEngine
         headphones.Renderer.SetGain(VolumeCurve.ToGain(s.HeadphonesLevel));
         cable.Renderer.SetGain(VolumeCurve.ToGain(s.CableLevel));
         mic.SetGain(VolumeCurve.ToGain(s.MicLevel), s.MicMuted);
-        mic.SetVoiceProcessing(s.VoiceNoiseSuppression, s.VoiceAutoLevel);
+        mic.SetVoiceProcessing(s.VoiceNoiseSuppression, s.VoiceAutoLevel, s.VoiceGate);
         statusDirty = true;
     }
 
