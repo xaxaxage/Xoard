@@ -38,6 +38,12 @@ on first start, see `src/Xoard.Core/Shell/LegacyMigration.cs`).
   - Mockups: https://claude.ai/artifact/Q2XkUuqhup1KvAY6SFaxnw
 - **Volume 0–200 %**, 100 % = unity (default for all three). Curve: cube up to 100 %, square above (200 % ≈ +12 dB);
   a −1 dBFS limiter keeps it from clipping.
+- **Voice is processed in Xoard (Nov 2026).** Discord must use the «Студия» input profile (its noise suppression,
+  echo cancellation and auto-gain kill sounds), which leaves the voice raw and quiet. So the mic path does it
+  itself, before mixing with sounds: RNNoise 0.2 (native `rnnoise.dll` in `src/Xoard.Core/Native`), auto-level
+  to −18 dBFS speech at 100 % (`VoiceProcessor`), its own −1 dBFS limiter after the slider. Two switches in
+  settings, both on. The DLL is built **locally with portable Zig** by `Native/build-rnnoise.cmd` — not GitHub
+  Actions: the user's `gh` login has no `workflow` scope (they declined it), so never add workflow files.
 - **Clips go through an editor.** Recording and «Сохранить» (replay) from the window open `ClipEditor` with the
   clip in memory: «Сохранить выделенное», «Сохранить целиком», «Выбросить», «Сбросить выделение». No file until the
   user saves. Hotkeys (in a game) and MCP still save straight to a file. Trim uses the same editor.

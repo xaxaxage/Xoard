@@ -90,6 +90,8 @@ public sealed partial class MainViewModel : ObservableObject, IAsyncDisposable
         MicLevel = a.MicLevel * 100;
         MicMuted = a.MicMuted;
         PassthroughEnabled = a.MicPassthroughEnabled;
+        VoiceNoiseSuppression = a.VoiceNoiseSuppression;
+        VoiceAutoLevel = a.VoiceAutoLevel;
         ModeIndex = a.PlaybackMode == PlaybackMode.Restart ? 1 : 0;
         LatencyIndex = (int)a.LatencyProfile;
         MicChannelIndex = (int)a.MicChannelMode;
@@ -166,6 +168,20 @@ public sealed partial class MainViewModel : ObservableObject, IAsyncDisposable
 
     [ObservableProperty]
     public partial bool PassthroughEnabled { get; set; }
+
+    /// <summary>Убирать шум из голоса (RNNoise).</summary>
+    [ObservableProperty]
+    public partial bool VoiceNoiseSuppression { get; set; }
+
+    /// <summary>Выравнивать громкость голоса: 100 % — обычная громкость речи.</summary>
+    [ObservableProperty]
+    public partial bool VoiceAutoLevel { get; set; }
+
+    /// <summary>Подсказка к «Убирать шум» (или почему шумоподавление не работает).</summary>
+    [ObservableProperty]
+    public partial string NoiseHint { get; set; } = NoiseHintDefault;
+
+    private const string NoiseHintDefault = "Клавиатура, вентилятор, шум комнаты. Звуки не затрагивает";
 
     [ObservableProperty]
     public partial int ModeIndex { get; set; }
@@ -723,6 +739,18 @@ public sealed partial class MainViewModel : ObservableObject, IAsyncDisposable
             UpdateAudio(a => a with { MicPassthroughEnabled = value }, apply: true);
     }
 
+    partial void OnVoiceNoiseSuppressionChanged(bool value)
+    {
+        if (!suppressSettings)
+            UpdateAudio(a => a with { VoiceNoiseSuppression = value }, apply: true);
+    }
+
+    partial void OnVoiceAutoLevelChanged(bool value)
+    {
+        if (!suppressSettings)
+            UpdateAudio(a => a with { VoiceAutoLevel = value }, apply: true);
+    }
+
     partial void OnLatencyIndexChanged(int value)
     {
         if (!suppressSettings && value >= 0)
@@ -823,6 +851,8 @@ public sealed partial class MainViewModel : ObservableObject, IAsyncDisposable
             : "VB-CABLE не найден: без него друзья не услышат звуки. Установите бесплатный драйвер и перезагрузите компьютер.";
         if (SetupGuideOpen)
             UpdateSetupChecks();
+
+        NoiseHint = s.Mic.VoiceProcessingError is { } noiseError ? $"Не работает — {noiseError}" : NoiseHintDefault;
 
         var issues = s.Issues.Select(i => new IssueView(IssueText.Title(i.Code), i.Message, ToSeverity(i.Severity), i.HelpUrl)).ToList();
         if (!issues.SequenceEqual(Issues))

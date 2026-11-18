@@ -312,7 +312,8 @@ public sealed class AudioEngine : IAudioEngine
             cb.PeakDb,
             -cable.Renderer.Limiter.TakeMaxGainReductionDb(),
             mic.InputMeter.TakeMax().PeakDb,
-            mic.OutputMeter.TakeMax().PeakDb);
+            mic.OutputMeter.TakeMax().PeakDb,
+            mic.VoiceGainDb);
     }
 
     /// <inheritdoc />
@@ -528,7 +529,7 @@ public sealed class AudioEngine : IAudioEngine
                 builder = builder.WithFormat(WaveFormat.CreateIeeeFloatWaveFormat(AudioFormat.SampleRate, choice.Device.Channels));
 
             var rec = builder.Build();
-            mic.Attach(rec.WaveFormat, Settings.MicChannelMode, ppmHints.GetValueOrDefault(choice.Device.Id + "|" + plan?.Cable?.Device.Id));
+            mic.Attach(rec.WaveFormat, Settings.MicChannelMode, ppmHints.GetValueOrDefault(choice.Device.Id + "|" + plan?.Cable?.Device.Id), choice.Device.Id);
             rec.DataAvailable += (buffer, flags, _, _) => mic.OnPacket(buffer, flags);
             rec.RecordingStopped += (_, e) => Post(() => OnMicStopped(gen, e.Exception));
             rec.StartRecording();
@@ -766,7 +767,8 @@ public sealed class AudioEngine : IAudioEngine
                 mic.Resyncs,
                 mic.Discontinuities,
                 micRestarts,
-                micLastError),
+                micLastError,
+                mic.VoiceProcessingAvailable ? null : RnNoise.LoadError ?? "Шумоподавление недоступно."),
             PlaybackMode,
             playing,
             snapshot.Outputs,
@@ -830,6 +832,7 @@ public sealed class AudioEngine : IAudioEngine
         headphones.Renderer.SetGain(VolumeCurve.ToGain(s.HeadphonesLevel));
         cable.Renderer.SetGain(VolumeCurve.ToGain(s.CableLevel));
         mic.SetGain(VolumeCurve.ToGain(s.MicLevel), s.MicMuted);
+        mic.SetVoiceProcessing(s.VoiceNoiseSuppression, s.VoiceAutoLevel);
         statusDirty = true;
     }
 

@@ -266,6 +266,31 @@
                             </StackPanel>
 
                             <StackPanel Spacing="8">
+                                <TextBlock Text="ГОЛОС" Style="{StaticResource MonoCap}" />
+                                <Border Background="{StaticResource XSurface}" BorderBrush="{StaticResource XLine}" BorderThickness="{Binding CardBorder, Source={StaticResource Shape}}"
+                                        CornerRadius="{Binding Card, Source={StaticResource Shape}}">
+                                    <StackPanel>
+                                        <Grid Style="{StaticResource FirstRow}" ColumnDefinitions="*,Auto">
+                                            <StackPanel VerticalAlignment="Center" Spacing="2">
+                                                <TextBlock Text="Убирать шум" Style="{StaticResource RowTitle}" />
+                                                <TextBlock Text="{x:Bind Vm.NoiseHint, Mode=OneWay}" Style="{StaticResource RowHint}" TextWrapping="Wrap" />
+                                            </StackPanel>
+                                            <ToggleSwitch Grid.Column="1" IsOn="{x:Bind Vm.VoiceNoiseSuppression, Mode=TwoWay}" OnContent="" OffContent="" MinWidth="0"
+                                                          VerticalAlignment="Center" AutomationProperties.Name="Убирать шум" />
+                                        </Grid>
+                                        <Grid Style="{StaticResource Row}" ColumnDefinitions="*,Auto">
+                                            <StackPanel VerticalAlignment="Center" Spacing="2">
+                                                <TextBlock Text="Выравнивать громкость" Style="{StaticResource RowTitle}" />
+                                                <TextBlock Text="На 100 % голос звучит нормально с любым микрофоном, на 200 % — очень громко" Style="{StaticResource RowHint}" TextWrapping="Wrap" />
+                                            </StackPanel>
+                                            <ToggleSwitch Grid.Column="1" IsOn="{x:Bind Vm.VoiceAutoLevel, Mode=TwoWay}" OnContent="" OffContent="" MinWidth="0"
+                                                          VerticalAlignment="Center" AutomationProperties.Name="Выравнивать громкость" />
+                                        </Grid>
+                                    </StackPanel>
+                                </Border>
+                            </StackPanel>
+
+                            <StackPanel Spacing="8">
                                 <TextBlock Text="ВОСПРОИЗВЕДЕНИЕ" Style="{StaticResource MonoCap}" />
                                 <Border Background="{StaticResource XSurface}" BorderBrush="{StaticResource XLine}" BorderThickness="{Binding CardBorder, Source={StaticResource Shape}}"
                                         CornerRadius="{Binding Card, Source={StaticResource Shape}}">
@@ -592,7 +617,7 @@
                                             <FontIcon Glyph="&#xE8BD;" FontSize="14" Foreground="{StaticResource XMuted}" VerticalAlignment="Center" />
                                             <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2">
                                                 <TextBlock Text="Discord" Style="{StaticResource RowTitle}" />
-                                                <TextBlock Text="Устройство ввода — CABLE Output, шумоподавление выключено" Style="{StaticResource RowHint}" />
+                                                <TextBlock Text="Устройство ввода — CABLE Output, профиль ввода — «Студия»" Style="{StaticResource RowHint}" />
                                             </StackPanel>
                                             <Button Grid.Column="2" Style="{StaticResource RowOutline}" Content="Как настроить" Command="{x:Bind Vm.ShowSetupGuideCommand}"
                                                     CornerRadius="{Binding Control, Source={StaticResource Shape}}" AutomationProperties.Name="Как настроить Discord" />

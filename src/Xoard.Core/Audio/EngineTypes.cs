@@ -177,7 +177,8 @@ public sealed record MicStatus(
     long Resyncs,
     long Discontinuities,
     long Restarts,
-    string? LastError);
+    string? LastError,
+    string? VoiceProcessingError = null);
 
 /// <summary>Что сейчас играет.</summary>
 public sealed record PlayingVoiceInfo(VoiceId Id, string SoundKey, string Name, double PositionSec, double DurationSec, OutputMask Buses);
@@ -222,7 +223,8 @@ public sealed record MeterSnapshot(
     float CablePeakDb,
     float CableLimiterDb,
     float MicInPeakDb,
-    float MicOutPeakDb);
+    float MicOutPeakDb,
+    float VoiceGainDb = 0f);
 
 /// <summary>Технические параметры движка.</summary>
 public sealed record AudioEngineOptions

@@ -61,8 +61,14 @@ public sealed record AudioSettings
     /// <summary>Громкость звуков в VB-CABLE (то, что слышат друзья), 0..2.</summary>
     public float CableLevel { get; init; } = 1f;
 
-    /// <summary>Громкость голоса в VB-CABLE, 0..2.</summary>
+    /// <summary>Громкость голоса в VB-CABLE, 0..2 (с выравниванием 1 = обычная громкость речи в Discord).</summary>
     public float MicLevel { get; init; } = 1f;
+
+    /// <summary>Убирать шум из голоса (RNNoise). Звуки это не затрагивает.</summary>
+    public bool VoiceNoiseSuppression { get; init; } = true;
+
+    /// <summary>Выравнивать громкость голоса по речи: на 100 % голос звучит одинаково с любым микрофоном.</summary>
+    public bool VoiceAutoLevel { get; init; } = true;
 
     /// <summary>Наложение или перезапуск при повторном нажатии.</summary>
     public PlaybackMode PlaybackMode { get; init; } = PlaybackMode.Overlap;

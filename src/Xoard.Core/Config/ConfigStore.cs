@@ -10,11 +10,11 @@ public sealed record WindowPlacement(int X, int Y, int Width, int Height, bool M
 /// <summary>Все настройки приложения (то, что сохраняется в settings.json).</summary>
 public sealed record AppConfig
 {
-    /// <summary>Версия формата файла (2 — палитра по умолчанию стала «xoard»).</summary>
+    /// <summary>Версия формата файла (2 — палитра по умолчанию стала «xoard»; 3 — голос выравнивается сам).</summary>
     public int Version { get; init; } = CurrentVersion;
 
     /// <summary>Текущая версия формата.</summary>
-    public const int CurrentVersion = 2;
+    public const int CurrentVersion = 3;
 
     /// <summary>Звук: устройства, громкости, режимы.</summary>
     public AudioSettings Audio { get; init; } = AudioSettings.Default;
@@ -121,7 +121,12 @@ public sealed class ConfigStore
                 config.Audio.Validate();
                 // Формат 1: палитра по умолчанию была «авто» — теперь жёлтая Xoard
                 if (config.Version < 2)
-                    config = config with { Version = AppConfig.CurrentVersion, Palette = config.Palette == "auto" ? "xoard" : config.Palette };
+                    config = config with { Version = 2, Palette = config.Palette == "auto" ? "xoard" : config.Palette };
+
+                // Формат 2: голос шёл без выравнивания, и тихий микрофон выкручивали выше 100 %. Теперь
+                // 100 % — обычная громкость речи, и прежнее усиление сверху оглушило бы — один раз возвращаем 100 %.
+                if (config.Version < 3)
+                    config = config with { Version = 3, Audio = config.Audio.MicLevel > 1f ? config.Audio with { MicLevel = 1f } : config.Audio };
                 return config with
                 {
                     SoundOrder = config.SoundOrder ?? [],

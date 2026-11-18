@@ -12,6 +12,8 @@ namespace Xoard.Core.Audio.Mic;
 /// Поток захвата пишет в кольцо (<see cref="OnPacket"/>), поток рендера VB-CABLE забирает
 /// (<see cref="MixInto"/>) через ресемплер с коэффициентом от <see cref="DriftController"/>.
 /// Между потоками — только SPSC-кольцо и «штамп» последнего пакета под seqlock: без блокировок.
+/// Голос до кольца проходит <see cref="VoiceProcessor"/> (шум, выравнивание громкости), после
+/// громкости ползунка — свой ограничитель, чтобы громкий голос не хрипел и не давил звуки в шине.
 /// </summary>
 /// <remarks>
 /// Заполнение оценивается по времени ПРИХОДА пакетов (ревью M3), а не по QPC устройства:
@@ -29,6 +31,8 @@ internal sealed class MicPassthrough
     private readonly PolyphaseResampler resampler = new(AudioFormat.Channels, MaxBlockFrames);
     private readonly DriftController drift = new();
     private readonly SmoothedGain gain;
+    private readonly VoiceProcessor voice;
+    private readonly BusLimiter voiceLimiter = new(BusLimiter.DefaultCeilingDb, BusLimiter.DefaultLookaheadMs, releaseMs: 60f);
     private readonly LevelMeter inputMeter = new();
     private readonly LevelMeter outputMeter = new();
     private readonly float[] captureScratch = new float[MaxBlockFrames * AudioFormat.Channels];
@@ -61,17 +65,21 @@ internal sealed class MicPassthrough
     private double lastFillFrames;
 
     public MicPassthrough(int targetFillMs = 30, int rampMs = 20)
-        : this(targetFillMs, rampMs, Stopwatch.GetTimestamp, Stopwatch.Frequency)
+        : this(targetFillMs, rampMs, Stopwatch.GetTimestamp, Stopwatch.Frequency, RnNoise.TryCreate())
     {
     }
 
-    /// <summary>Конструктор для тестов: собственные часы (тики) вместо <see cref="Stopwatch"/>.</summary>
-    internal MicPassthrough(int targetFillMs, int rampMs, Func<long> clock, long ticksPerSecond)
+    /// <summary>
+    /// Конструктор для тестов: собственные часы (тики) вместо <see cref="Stopwatch"/> и свой подавитель
+    /// шума (null — голос без обработки).
+    /// </summary>
+    internal MicPassthrough(int targetFillMs, int rampMs, Func<long> clock, long ticksPerSecond, IVoiceDenoiser? denoiser = null)
     {
         this.clock = clock;
         this.ticksPerSecond = ticksPerSecond;
         TargetFillMs = targetFillMs;
         gain = SmoothedGain.FromMilliseconds(rampMs, 1f);
+        voice = new VoiceProcessor(denoiser);
     }
 
     /// <summary>Целевое заполнение буфера (задержка), мс.</summary>
@@ -113,6 +121,15 @@ internal sealed class MicPassthrough
 
     public LevelMeter OutputMeter => outputMeter;
 
+    /// <summary>Шумоподавление доступно (rnnoise.dll загрузилась).</summary>
+    public bool VoiceProcessingAvailable => voice.Available;
+
+    /// <summary>Текущее усиление выравнивания голоса, дБ.</summary>
+    public float VoiceGainDb => voice.GainDb;
+
+    /// <summary>Шумоподавление и выравнивание громкости голоса. Можно звать с любого потока.</summary>
+    public void SetVoiceProcessing(bool noiseSuppression, bool autoLevel) => voice.Configure(noiseSuppression, autoLevel);
+
     /// <summary>Громкость голоса (линейная) и мягкое выключение. Можно звать с любого потока.</summary>
     public void SetGain(float linear, bool isMuted)
     {
@@ -123,11 +140,13 @@ internal sealed class MicPassthrough
 
     /// <summary>
     /// Подключает новый источник (управляющий поток, захват ещё не запущен).
-    /// <paramref name="ppmHint"/> — известный дрейф этой пары устройств для быстрого захвата.
+    /// <paramref name="ppmHint"/> — известный дрейф этой пары устройств для быстрого захвата;
+    /// <paramref name="deviceId"/> — микрофон (для того же микрофона выравнивание помнит его громкость).
     /// </summary>
-    public void Attach(WaveFormat captureFormat, MicChannelMode mode, double ppmHint = 0)
+    public void Attach(WaveFormat captureFormat, MicChannelMode mode, double ppmHint = 0, string? deviceId = null)
     {
         warmStartPpm = ppmHint;
+        voice.Reset(deviceId);
         // Захват остановлен — счётчик записи стабилен; всё до него читатель выбросит
         Volatile.Write(ref staleBefore, ring.FramesWritten);
         Volatile.Write(ref converter, new CaptureConverter(captureFormat, mode));
@@ -170,6 +189,7 @@ internal sealed class MicPassthrough
                 conv.Convert(data.Slice(offsetBytes, frames * conv.BytesPerFrame), dest);
 
             inputMeter.Process(dest);
+            voice.Process(dest);
             var written = ring.Write(dest);
             if (written < frames)
                 Interlocked.Add(ref droppedFrames, frames - written);
@@ -269,6 +289,7 @@ internal sealed class MicPassthrough
     private void Finish(Span<float> output, Span<float> bus)
     {
         gain.Apply(output);
+        voiceLimiter.Process(output);
         outputMeter.Process(output);
         SampleOps.Add(output, bus[..output.Length]);
     }

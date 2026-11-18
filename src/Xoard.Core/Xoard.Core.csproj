@@ -13,6 +13,12 @@
     <PackageReference Include="NAudio" />
   </ItemGroup>
 
+  <!-- Шумоподавление голоса: RNNoise 0.2 (BSD-3), собран Native\build-rnnoise.cmd; кладётся рядом с программой -->
+  <ItemGroup>
+    <None Include="Native\rnnoise.dll" Link="rnnoise.dll" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="Native\RNNoise-COPYING.txt" Link="RNNoise-COPYING.txt" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
   <ItemGroup>
     <ProjectReference Include="..\Xoard.Protocol\Xoard.Protocol.csproj" />
   </ItemGroup>
