@@ -8,7 +8,7 @@
     <Deterministic>true</Deterministic>
     <Company>Xoard</Company>
     <Product>Xoard</Product>
-    <Version>1.3.0</Version>
+    <Version>1.4.0</Version>
     <!-- Р’СЃРµ bin/obj РІ artifacts/ РІ РєРѕСЂРЅРµ: РєРѕСЂРѕС‡Рµ РїСѓС‚Рё (Р»РёРјРёС‚ Windows 260 СЃРёРјРІРѕР»РѕРІ) Рё С‡РёС‰Рµ РґРµСЂРµРІРѕ -->
     <UseArtifactsOutput>true</UseArtifactsOutput>
   </PropertyGroup>
