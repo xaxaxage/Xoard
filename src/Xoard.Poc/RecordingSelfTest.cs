@@ -7,9 +7,9 @@ using Xoard.Core.Recording;
 namespace Xoard.Poc;
 
 /// <summary>
-/// recording-selftest: повтор пишет звук других программ, но не свой.
+/// recording-selftest: дорожка «Игра» повтора пишет звук других программ, но не свой.
 /// Этот процесс играет 1000 Гц, отдельный процесс — 700 Гц (оба в CABLE Input, не в наушники);
-/// в сохранённом повторе должно быть 700 Гц и не должно быть 1000 Гц.
+/// в дорожке «Игра» должно быть 700 Гц и не должно быть 1000 Гц.
 /// </summary>
 internal static class RecordingSelfTest
 {
@@ -38,8 +38,13 @@ internal static class RecordingSelfTest
                 return 3;
             }
 
-            Ui.Heading("Самопроверка повтора");
-            Ui.Info($"  Без звуков Xoard (петля процессов): {(service.ExcludesOwnSounds ? "да" : "нет — старая Windows, пишется всё")}");
+            Ui.Heading("Самопроверка повтора по дорожкам");
+            if (!service.CapturesApps)
+            {
+                Ui.Error($"Петли программ недоступны: {service.LastError}");
+                return 3;
+            }
+
             Thread.Sleep(500);
 
             // Куда играть: --device (часть имени), по умолчанию CABLE Input; громкость --volume
@@ -48,38 +53,52 @@ internal static class RecordingSelfTest
             var playedDb = 20 * Math.Log10(volume);
             Ui.Info($"  Тоны: «{deviceName}», {playedDb:0} dBFS");
 
-            // Чужой процесс: 700 Гц. Дочерний процесс входит в наше «дерево» и тоже исключается петлёй,
-            // поэтому при «external» его запускает снаружи тот, кто запустил проверку (не наш потомок).
+            // Чужой процесс: 700 Гц. Наши потомки исключаются (как звуки Xoard), поэтому тон запускается
+            // через «start» — его родитель cmd сразу завершается, и процесс уже не наш потомок.
+            // «external» — его запускает снаружи тот, кто запустил проверку.
             var external = options.Positional.Contains("external");
             var culture = System.Globalization.CultureInfo.InvariantCulture;
-            using var other = external ? null : Process.Start(new ProcessStartInfo(Environment.ProcessPath!,
-                $"tone --device \"{deviceName}\" --freq 700 --volume {volume.ToString(culture)} --seconds 2 --preroll 0 --postroll 0")
-            { UseShellExecute = false, CreateNoWindow = true, RedirectStandardOutput = true });
-            if (external)
+            if (!external)
+            {
+                using var starter = Process.Start(new ProcessStartInfo("cmd.exe",
+                    $"/c start \"\" /min \"{Environment.ProcessPath}\" tone --device \"{deviceName}\" --freq 700 --volume {volume.ToString(culture)} --seconds 4 --preroll 0 --postroll 0")
+                { UseShellExecute = false, CreateNoWindow = true });
+                starter?.WaitForExit(5_000);
+            }
+            else
+            {
                 Ui.Info("  Жду 700 Гц от внешнего процесса…");
+            }
 
-            // Свой процесс: 1000 Гц туда же
+            // Свой процесс: 1000 Гц туда же (петля чужого процесса запускается в течение ~2 с)
             using (var enumerator = new MMDeviceEnumerator())
             {
                 var target = AudioDevices.FindRenderByName(enumerator, deviceName);
-                Player.PlayToEnd([new PlaybackTarget(target, Signals.CreateTone(1000, volume, 2))], 50);
+                Player.PlayToEnd([new PlaybackTarget(target, Signals.CreateTone(1000, volume, 4))], 50);
             }
 
-            other?.WaitForExit(10_000);
-            Thread.Sleep(external ? 1500 : 300);
+            Thread.Sleep(1500);
+            var saved = service.SaveReplayAsync(7, folder, "test").GetAwaiter().GetResult();
+            var gamePath = Path.Combine(saved.TracksFolder, Tracks.Title(TrackKind.Game) + ".wav");
+            if (!File.Exists(gamePath))
+            {
+                Ui.Error($"✗ Дорожка «Игра» пустая. Петли: {string.Join(", ", service.AppNames(TrackKind.Game))}; {service.LastError}");
+                return 5;
+            }
 
-            var path = service.SaveReplayAsync(4, folder, "test").GetAwaiter().GetResult();
-            var sound = SoundDecoder.Decode(path, TimeSpan.FromMinutes(1));
+            var sound = SoundDecoder.Decode(gamePath, TimeSpan.FromMinutes(1));
             var otherDb = Level(sound.Samples, 700);
             var ownDb = Level(sound.Samples, 1000);
-            Ui.Info($"  В повторе: чужой звук 700 Гц {otherDb:0.0} dBFS, свой звук 1000 Гц {ownDb:0.0} dBFS, длина {sound.Duration.TotalSeconds:0.0} с");
+            Ui.Info($"  Дорожка «Игра» ({string.Join(", ", service.AppNames(TrackKind.Game))}): чужой звук 700 Гц {otherDb:0.0} dBFS, " +
+                    $"свой 1000 Гц {ownDb:0.0} dBFS, длина {sound.Duration.TotalSeconds:0.0} с");
+            Ui.Info($"  Файлы: {string.Join(", ", Directory.GetFiles(saved.TracksFolder).Select(Path.GetFileName))}");
 
             // Свой тон, если бы попал, был бы около playedDb; ниже на 12+ дБ — только утечка от чужого тона
-            var ok = otherDb > playedDb - 6 && (!service.ExcludesOwnSounds || ownDb < playedDb - 12);
+            var ok = otherDb > playedDb - 6 && ownDb < playedDb - 12;
             if (ok)
-                Ui.Ok("✓ Повтор пишет звук других программ" + (service.ExcludesOwnSounds ? " и не пишет звуки Xoard." : "."));
+                Ui.Ok("✓ Дорожка «Игра» пишет звук других программ и не пишет звуки Xoard.");
             else
-                Ui.Error("✗ Повтор записал не то, что ожидалось (см. уровни выше).");
+                Ui.Error("✗ Дорожка «Игра» записала не то, что ожидалось (см. уровни выше).");
             return ok ? 0 : 5;
         }
         finally

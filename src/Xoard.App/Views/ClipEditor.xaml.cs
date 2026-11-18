@@ -30,6 +30,8 @@ public sealed partial class ClipEditor : UserControl
     private readonly Rectangle endHandle = new() { Width = 2 };
     private readonly Border startGrip = new() { Width = 12, Height = 14 };
     private readonly Border endGrip = new() { Width = 12, Height = 14 };
+    private readonly List<Lane> lanes = [];
+    private AudioClip mix;
     private WavePeak[] peaks = [];
     private double selStart;
     private double selEnd;
@@ -45,13 +47,18 @@ public sealed partial class ClipEditor : UserControl
         New,
     }
 
+    /// <summary>Дорожка под общей волной: галочка, маленькая волна и тень выделения.</summary>
+    private sealed record Lane(ClipTrack Track, CheckBox Check, Canvas Canvas, Polygon Wave, Rectangle Selection);
+
     public ClipEditor(MainViewModel vm, ClipDraft draft, Action close)
     {
         this.vm = vm;
         this.draft = draft;
         this.close = close;
+        mix = draft.Clip;
         duration = Math.Max(0.001, draft.Clip.Seconds);
         InitializeComponent();
+        BuildLanes();
 
         var res = Application.Current.Resources;
         wave.Fill = (Brush)res["XWave"];
@@ -81,6 +88,8 @@ public sealed partial class ClipEditor : UserControl
         else
         {
             NameBox.Text = draft.Clip.SuggestedName;
+            if (draft.Tracks is not null)
+                HintText.Text = "Галочки — какие дорожки войдут в общий звук. Каждая непустая дорожка сохраняется отдельным WAV в папке «Дорожки». Прослушивание слышите только вы.";
         }
 
         (selStart, selEnd) = WithoutSilentEdges();
@@ -101,13 +110,120 @@ public sealed partial class ClipEditor : UserControl
 
     // ───────── рисование ─────────
 
-    private void OnWaveSizeChanged(object sender, SizeChangedEventArgs e)
+    private void OnWaveSizeChanged(object sender, SizeChangedEventArgs e) => RefreshWave();
+
+    /// <summary>Пересчитать общую волну (новый размер или другой набор дорожек).</summary>
+    private void RefreshWave()
     {
-        var buckets = Math.Max(16, (int)e.NewSize.Width);
-        peaks = AudioClips.Peaks(draft.Clip.Stereo, buckets);
+        var buckets = Math.Max(16, (int)WaveCanvas.ActualWidth);
+        peaks = AudioClips.Peaks(mix.Stereo, buckets);
         wave.Points = BuildWave(0, peaks.Length);
         DrawRuler();
         Redraw();
+    }
+
+    private void BuildLanes()
+    {
+        if (draft.Tracks is not { } tracks)
+            return;
+        var res = Application.Current.Resources;
+        foreach (var track in tracks.Tracks)
+        {
+            var check = new CheckBox
+            {
+                Content = track.Title + (track.IsSilent ? " · тишина" : ""),
+                IsChecked = !track.IsSilent,
+                IsEnabled = !track.IsSilent,
+                MinWidth = 0,
+            };
+            Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(check, $"Дорожка «{track.Title}» в общем звуке");
+            ToolTipService.SetToolTip(check, "Входит ли дорожка в общий звук");
+            check.Checked += (_, _) => OnTracksChanged();
+            check.Unchecked += (_, _) => OnTracksChanged();
+
+            var canvas = new Canvas { Height = 34, Background = (Brush)res["XBg"] };
+            var laneWave = new Polygon { Fill = (Brush)res["XWave"] };
+            var laneSelection = new Rectangle { Fill = (Brush)res["XPrimarySoft"], Opacity = 0.55, Height = 34 };
+            canvas.Children.Add(laneSelection);
+            canvas.Children.Add(laneWave);
+            var border = new Border
+            {
+                Child = canvas,
+                BorderBrush = (Brush)res["XLine"],
+                BorderThickness = new Thickness(1),
+                CornerRadius = ((Theme.ShapeTokens)res["Shape"]).Inner,
+            };
+            var row = new Grid { ColumnSpacing = 12 };
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(150) });
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            check.VerticalAlignment = VerticalAlignment.Center;
+            Grid.SetColumn(border, 1);
+            row.Children.Add(check);
+            row.Children.Add(border);
+            TrackPanel.Children.Add(row);
+
+            var lane = new Lane(track, check, canvas, laneWave, laneSelection);
+            canvas.SizeChanged += (_, _) => DrawLane(lane);
+            lanes.Add(lane);
+        }
+
+        TrackPanel.Visibility = Visibility.Visible;
+    }
+
+    private void OnTracksChanged()
+    {
+        if (draft.Tracks is not { } tracks)
+            return;
+        mix = tracks.Mix(IncludedTracks());
+        vm.StopPreview();
+        RefreshWave();
+    }
+
+    private List<TrackKind> IncludedTracks() => [.. lanes.Where(l => l.Check.IsChecked == true).Select(l => l.Track.Kind)];
+
+    /// <summary>Маленькая острая волна дорожки (по моно-сумме, нормирована по общей громкости всех дорожек).</summary>
+    private void DrawLane(Lane lane)
+    {
+        var w = lane.Canvas.ActualWidth;
+        var h = lane.Canvas.ActualHeight;
+        var samples = lane.Track.Stereo;
+        var frames = samples.Length / 2;
+        var points = new PointCollection();
+        if (w > 0 && frames > 0)
+        {
+            var buckets = Math.Max(8, (int)(w / 2));
+            var top = Math.Max(0.05f, lanes.Max(l => l.Track.Peak));
+            var mid = h / 2;
+            var amps = new double[buckets];
+            for (var b = 0; b < buckets; b++)
+            {
+                var from = (int)((long)b * frames / buckets);
+                var to = (int)((long)(b + 1) * frames / buckets);
+                var max = 0;
+                for (var f = from; f < to; f++)
+                    max = Math.Max(max, Math.Abs((samples[2 * f] + samples[(2 * f) + 1]) / 2));
+                amps[b] = Math.Max(0.5, max / 32768.0 / top * (mid - 2));
+            }
+
+            for (var b = 0; b < buckets; b++)
+                points.Add(new Point(b * w / (buckets - 1), mid - amps[b]));
+            for (var b = buckets - 1; b >= 0; b--)
+                points.Add(new Point(b * w / (buckets - 1), mid + amps[b]));
+        }
+
+        lane.Wave.Points = points;
+        lane.Wave.Opacity = lane.Check.IsChecked == true ? 1 : 0.35;
+        PlaceLaneSelection(lane);
+    }
+
+    private void PlaceLaneSelection(Lane lane)
+    {
+        var w = lane.Canvas.ActualWidth;
+        var x0 = selStart / duration * w;
+        var x1 = selEnd / duration * w;
+        Canvas.SetLeft(lane.Selection, x0);
+        lane.Selection.Width = Math.Max(1, x1 - x0);
+        lane.Wave.Opacity = lane.Check.IsChecked == true ? 1 : 0.35;
     }
 
     private PointCollection BuildWave(int from, int to)
@@ -143,6 +259,8 @@ public sealed partial class ClipEditor : UserControl
         Canvas.SetLeft(startGrip, x0 - 6);
         Canvas.SetLeft(endGrip, x1 - 6);
         selectedWave.Points = BuildWave((int)Math.Floor(selStart / duration * peaks.Length), (int)Math.Ceiling(selEnd / duration * peaks.Length));
+        foreach (var lane in lanes)
+            PlaceLaneSelection(lane);
 
         var whole = IsWhole;
         SelectionText.Text = whole
@@ -237,7 +355,7 @@ public sealed partial class ClipEditor : UserControl
 
     private bool IsWhole => selStart <= 0.001 && selEnd >= duration - 0.001;
 
-    private void OnPreview(object sender, RoutedEventArgs e) => vm.PreviewClip(draft.Clip, selStart, selEnd);
+    private void OnPreview(object sender, RoutedEventArgs e) => vm.PreviewClip(mix, selStart, selEnd);
 
     private void OnStopPreview(object sender, RoutedEventArgs e) => vm.StopPreview();
 
@@ -271,7 +389,7 @@ public sealed partial class ClipEditor : UserControl
             if (draft.TrimTarget is { } target)
                 error = IsWhole ? null : await vm.TrimAsync(target, start, end);
             else
-                error = await vm.SaveClipAsync(draft, NameBox.Text, start, end);
+                error = await vm.SaveClipAsync(draft, NameBox.Text, start, end, draft.Tracks is null ? null : IncludedTracks());
 
             if (error is null)
             {
@@ -298,7 +416,7 @@ public sealed partial class ClipEditor : UserControl
     private (double Start, double End) WithoutSilentEdges()
     {
         const int buckets = 2000;
-        var p = AudioClips.Peaks(draft.Clip.Stereo, buckets);
+        var p = AudioClips.Peaks(mix.Stereo, buckets);
         var first = Array.FindIndex(p, x => Math.Max(-x.Min, x.Max) > 0.02f);
         var last = Array.FindLastIndex(p, x => Math.Max(-x.Min, x.Max) > 0.02f);
         if (first < 0)

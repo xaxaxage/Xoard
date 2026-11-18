@@ -30,6 +30,9 @@
             </Grid>
             <Canvas x:Name="Ruler" Height="16" Margin="1,-6,1,0" />
 
+            <!-- Дорожки: галочка — входит ли дорожка в общий звук; каждая сохраняется отдельным WAV -->
+            <StackPanel x:Name="TrackPanel" Spacing="4" Visibility="Collapsed" />
+
             <!-- Отсчёты -->
             <Grid ColumnDefinitions="*,Auto">
                 <TextBlock x:Name="SelectionText" FontFamily="{StaticResource XFontMono}" FontSize="13" />

@@ -140,12 +140,12 @@ public sealed partial class MainViewModel : IXoardControl
             "mic" or "microphone" or "микрофон" => RecordingSource.Microphone,
             _ => throw new ControlException(ControlErrorCodes.BadRequest, "source должен быть system или mic."),
         };
-        if (recorder.Recording is not null)
+        if (recorder.IsRecording)
             throw new ControlException(ControlErrorCodes.BadRequest, "Запись уже идёт — сначала stop_recording.");
 
         try
         {
-            await recorder.StartRecordingAsync(source, config.Audio.MicDeviceId).ConfigureAwait(true);
+            await recorder.StartRecordingAsync(Tracks.For(source)).ConfigureAwait(true);
         }
         catch (InvalidOperationException ex)
         {
@@ -158,32 +158,40 @@ public sealed partial class MainViewModel : IXoardControl
 
     public Task<SoundInfo> StopRecordingAsync(SaveSoundArgs args, CancellationToken ct) => OnUiAsync(async () =>
     {
-        if (recorder.Recording is null)
+        if (!recorder.IsRecording)
             throw new ControlException(ControlErrorCodes.BadRequest, "Запись не идёт — сначала start_recording.");
-        var path = await recorder.StopRecordingAsync(library.Folder, CleanName(args.Name)).ConfigureAwait(true);
+        (string? MixPath, string TracksFolder)? saved;
+        try
+        {
+            saved = await recorder.StopRecordingAsync(library.Folder, CleanName(args.Name)).ConfigureAwait(true);
+        }
+        catch (Exception ex) when (ex is ArgumentException or IOException or UnauthorizedAccessException)
+        {
+            IsRecording = false;
+            throw new ControlException(ControlErrorCodes.Unavailable, ex.Message);
+        }
+
         IsRecording = false;
-        if (path is null)
+        if (saved is null)
             throw new ControlException(ControlErrorCodes.Unavailable, "Запись слишком короткая — ничего не сохранено.");
-        var item = AddRecordedFile(path);
-        ShowToast($"Запись сохранена: «{item.Name}».", InfoBarSeverity.Success);
+        var item = AddSavedTracks(saved.Value, "Запись");
         return await LoadedInfoAsync(item).ConfigureAwait(true);
     });
 
     public Task<SoundInfo> SaveLastSecondsAsync(SaveSoundArgs args, CancellationToken ct) => OnUiAsync(async () =>
     {
         var seconds = args.Seconds > 0 ? args.Seconds : ReplaySeconds;
-        string path;
+        (string? MixPath, string TracksFolder) saved;
         try
         {
-            path = await recorder.SaveReplayAsync(seconds, library.Folder, CleanName(args.Name)).ConfigureAwait(true);
+            saved = await recorder.SaveReplayAsync(seconds, library.Folder, CleanName(args.Name)).ConfigureAwait(true);
         }
-        catch (InvalidOperationException ex)
+        catch (Exception ex) when (ex is InvalidOperationException or ArgumentException or IOException or UnauthorizedAccessException)
         {
             throw new ControlException(ControlErrorCodes.Unavailable, ex.Message);
         }
 
-        var item = AddRecordedFile(path);
-        ShowToast($"Повтор сохранён: «{item.Name}».", InfoBarSeverity.Success);
+        var item = AddSavedTracks(saved, "Повтор");
         return await LoadedInfoAsync(item).ConfigureAwait(true);
     });
 
@@ -215,9 +223,20 @@ public sealed partial class MainViewModel : IXoardControl
         return await LoadedInfoAsync(item).ConfigureAwait(true);
     });
 
+    /// <summary>Сохранённые дорожки для Claude: общий звук обязателен — его и возвращаем.</summary>
+    private SoundItem AddSavedTracks((string? MixPath, string TracksFolder) saved, string what) =>
+        AddSavedTracksOrNull(saved, what)
+        ?? throw new ControlException(ControlErrorCodes.Unavailable, $"Общий звук пуст — сохранены только дорожки в «{saved.TracksFolder}».");
+
     private RecordingInfo RecordingState() => new(
-        recorder.Recording is not null,
-        recorder.Recording switch { RecordingSource.System => "system", RecordingSource.Microphone => "mic", _ => null },
+        recorder.IsRecording,
+        recorder.RecordingMix switch
+        {
+            null => null,
+            [TrackKind.Voice] => "mic",
+            [TrackKind.Discord, TrackKind.Game] => "system",
+            _ => "all",
+        },
         Math.Round(recorder.RecordingElapsed.TotalSeconds, 1),
         recorder.ReplayEnabled,
         Math.Round(recorder.ReplayBufferedSeconds, 1));

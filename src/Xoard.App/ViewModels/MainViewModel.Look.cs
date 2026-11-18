@@ -69,11 +69,6 @@ public sealed partial class MainViewModel
 
     public bool IsLayoutStream => LayoutId == "stream";
 
-    /// <summary>Откуда пишет запись — коротко, для кнопки рядом с записью.</summary>
-    public string RecordSourceShort => RecordSourceIndex == 1 ? "Микрофон" : "Компьютер";
-
-    public string RecordSourceGlyph => RecordSourceIndex == 1 ? "" : "";
-
     public bool IsStrictShape
     {
         get => !IsSoftShape;
@@ -112,26 +107,6 @@ public sealed partial class MainViewModel
     public string ReplaySaveHint => config.ReplayHotkey is { } key ? $"или {key} в игре" : "Клавиша — в настройках";
 
     public string RecordHotkeyShort => config.RecordHotkey ?? "";
-
-    public bool RecordFromSystem
-    {
-        get => RecordSourceIndex == 0;
-        set
-        {
-            if (value)
-                RecordSourceIndex = 0;
-        }
-    }
-
-    public bool RecordFromMic
-    {
-        get => RecordSourceIndex == 1;
-        set
-        {
-            if (value)
-                RecordSourceIndex = 1;
-        }
-    }
 
     private bool AnimationsOn => AnimationsEnabled && new Windows.UI.ViewManagement.UISettings().AnimationsEnabled;
 
@@ -202,9 +177,6 @@ public sealed partial class MainViewModel
     [RelayCommand]
     private void PickLayout(string id) => LayoutId = id is "dock" or "stream" ? id : "pult";
 
-    [RelayCommand]
-    private void ToggleRecordSource() => RecordSourceIndex = RecordSourceIndex == 1 ? 0 : 1;
-
     /// <summary>Сохранить повтор как есть, без окна обрезки.</summary>
     [RelayCommand]
     private Task<SoundItem?> SaveReplayAsIs() => SaveReplayAsync(fromHotkey: true);
@@ -233,15 +205,16 @@ public sealed partial class MainViewModel
         OnPropertyChanged(nameof(RecordHotkeyShort));
     }
 
-    /// <summary>Живая волна повтора (последние N секунд звука компьютера) для элемента LiveWaveView.</summary>
-    public Controls.ILiveWaveSource LiveWave => liveFeed ??= new LiveFeed(this);
+    /// <summary>Живые волны повтора по дорожкам (Discord, игра, голос) для элемента LiveTracksView.</summary>
+    public IReadOnlyList<Controls.LiveTrack> LiveTracks => liveTracks ??=
+        [.. Tracks.All.Select(kind => new Controls.LiveTrack(Tracks.Title(kind), new LiveFeed(this, kind)))];
 
     /// <summary>Деления на живой волне — каждые 5 секунд.</summary>
     public int ReplayDivisions => Math.Max(1, (int)Math.Round(ReplaySeconds / 5));
 
-    private LiveFeed? liveFeed;
+    private IReadOnlyList<Controls.LiveTrack>? liveTracks;
 
-    private sealed class LiveFeed(MainViewModel vm) : Controls.ILiveWaveSource
+    private sealed class LiveFeed(MainViewModel vm, TrackKind track) : Controls.ILiveWaveSource
     {
         public long Written => vm.recorder.LiveBucketsWritten;
 
@@ -253,8 +226,8 @@ public sealed partial class MainViewModel
         {
             if (vm.ReplayEnabled)
             {
-                vm.recorder.CopyLivePeaks(peaks);
-                vm.recorder.CopyLiveRms(rms);
+                vm.recorder.CopyLivePeaks(track, peaks);
+                vm.recorder.CopyLiveRms(track, rms);
             }
             else
             {
@@ -266,7 +239,7 @@ public sealed partial class MainViewModel
         public void Tick()
         {
             if (vm.ReplayEnabled)
-                vm.recorder.CatchUpSilence();
+                vm.recorder.UpdateLive();
         }
     }
 }

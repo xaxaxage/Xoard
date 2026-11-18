@@ -60,7 +60,7 @@
             </Grid>
 
             <!-- ═══ Живая полоса повтора ═══ -->
-            <Border Grid.Row="1" Height="80" Padding="18,10,12,10" Background="{StaticResource XSurface}" BorderBrush="{StaticResource XLine}"
+            <Border Grid.Row="1" Height="112" Padding="18,10,12,10" Background="{StaticResource XSurface}" BorderBrush="{StaticResource XLine}"
                     BorderThickness="{Binding CardBorder, Source={StaticResource Shape}}" CornerRadius="{Binding Card, Source={StaticResource Shape}}">
                 <Grid ColumnDefinitions="110,*,Auto" ColumnSpacing="16">
                     <StackPanel VerticalAlignment="Center" Spacing="4">
@@ -70,10 +70,10 @@
                         </StackPanel>
                         <TextBlock Text="{x:Bind Vm.ReplayLengthText, Mode=OneWay}" FontFamily="{StaticResource XFontMono}" FontSize="22" FontWeight="Bold" />
                     </StackPanel>
-                    <Grid Grid.Column="1" RowDefinitions="*,Auto" RowSpacing="4" AutomationProperties.Name="Волна последних секунд звука компьютера">
-                        <controls:LiveWaveView Source="{x:Bind Vm.LiveWave}" Divisions="{x:Bind Vm.ReplayDivisions, Mode=OneWay}" PeakBrush="{StaticResource XWave}" RmsBrush="{StaticResource XPrimary}" LineBrush="{StaticResource XWave}" TickBrush="{StaticResource XLine}" />
+                    <Grid Grid.Column="1" RowDefinitions="*,Auto" RowSpacing="4" AutomationProperties.Name="Волны последних секунд по дорожкам: Discord, игра, голос">
+                        <controls:LiveTracksView Tracks="{x:Bind Vm.LiveTracks}" LabelBrush="{StaticResource XMuted}" Divisions="{x:Bind Vm.ReplayDivisions, Mode=OneWay}" PeakBrush="{StaticResource XWave}" RmsBrush="{StaticResource XPrimary}" LineBrush="{StaticResource XWave}" TickBrush="{StaticResource XLine}" />
                         <Rectangle Width="2" HorizontalAlignment="Right" Fill="{StaticResource XAccent}" Margin="0,-2,0,-2" />
-                        <Grid Grid.Row="1" ColumnDefinitions="*,*,*,Auto">
+                        <Grid Grid.Row="1" ColumnDefinitions="*,*,*,Auto" Margin="60,0,0,0">
                             <TextBlock FontFamily="{StaticResource XFontMono}" Text="{x:Bind Vm.ReplayTickFar, Mode=OneWay}" Style="{StaticResource XCap}" FontWeight="Normal" />
                             <TextBlock FontFamily="{StaticResource XFontMono}" Grid.Column="1" Text="{x:Bind Vm.ReplayTickMid, Mode=OneWay}" Style="{StaticResource XCap}" FontWeight="Normal" />
                             <TextBlock FontFamily="{StaticResource XFontMono}" Grid.Column="2" Text="{x:Bind Vm.ReplayTickNear, Mode=OneWay}" Style="{StaticResource XCap}" FontWeight="Normal" />
@@ -236,14 +236,6 @@
                         <TextBlock FontFamily="{StaticResource XFontMono}" Text="{x:Bind Vm.RecordingTimeText, Mode=OneWay}" Foreground="{StaticResource XBg}" FontSize="14" FontWeight="SemiBold" />
                     </StackPanel>
                 </Border>
-                <Button Style="{StaticResource XQuietButton}" Command="{x:Bind Vm.ToggleRecordSourceCommand}" Height="22" MinHeight="0" Padding="4,0" HorizontalAlignment="Center"
-                        Foreground="{StaticResource XMuted}" FontSize="12" Visibility="{x:Bind Vm.IsNotRecording, Mode=OneWay}"
-                        ToolTipService.ToolTip="Что записывать: звук компьютера или микрофон (нажмите, чтобы сменить)">
-                    <StackPanel Orientation="Horizontal" Spacing="4">
-                        <FontIcon Glyph="{x:Bind Vm.RecordSourceGlyph, Mode=OneWay}" FontSize="11" />
-                        <TextBlock Text="{x:Bind Vm.RecordSourceShort, Mode=OneWay}" />
-                    </StackPanel>
-                </Button>
                 <Button Style="{StaticResource XButton}" Command="{x:Bind Vm.ToggleRecordingCommand}" Width="64" Height="64" Padding="0" CornerRadius="32"
                         Background="{StaticResource XAccent}" Foreground="{StaticResource XOnAccent}"
                         AutomationProperties.Name="Начать или остановить запись" ToolTipService.ToolTip="{x:Bind Vm.RecordButtonText, Mode=OneWay}">

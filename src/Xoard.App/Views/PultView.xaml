@@ -64,23 +64,23 @@
             </Button>
         </Grid>
 
-        <!-- ═══ Живая полоса: последние N секунд звука компьютера ═══ -->
-        <Border Grid.Row="1" Height="96" Padding="18,12" Background="{StaticResource XSurface}" BorderBrush="{StaticResource XLine}"
+        <!-- ═══ Живая полоса: последние N секунд по дорожкам ═══ -->
+        <Border Grid.Row="1" Height="124" Padding="18,12" Background="{StaticResource XSurface}" BorderBrush="{StaticResource XLine}"
                 BorderThickness="{Binding CardBorder, Source={StaticResource Shape}}" CornerRadius="{Binding Card, Source={StaticResource Shape}}">
             <Grid ColumnDefinitions="160,*,Auto" ColumnSpacing="18">
                 <StackPanel VerticalAlignment="Center" Spacing="4">
                     <TextBlock Text="{x:Bind Vm.ReplayTitle, Mode=OneWay}" Style="{StaticResource XHead}" />
-                    <TextBlock Text="Звук компьютера, без звуков Xoard" Style="{StaticResource XCap}" FontWeight="Normal" TextWrapping="Wrap" />
+                    <TextBlock Text="Discord, игра и голос — каждый на своей дорожке" Style="{StaticResource XCap}" FontWeight="Normal" TextWrapping="Wrap" />
                     <StackPanel Orientation="Horizontal" Spacing="6">
                         <Ellipse Width="7" Height="7" Fill="{StaticResource XRecording}" VerticalAlignment="Center" Visibility="{x:Bind Vm.ReplayEnabled, Mode=OneWay}" />
                         <TextBlock Text="{x:Bind Vm.ReplayStateText, Mode=OneWay}" Style="{StaticResource XCap}" Foreground="{StaticResource XPrimary}" />
                     </StackPanel>
                 </StackPanel>
 
-                <Grid Grid.Column="1" RowDefinitions="*,Auto" RowSpacing="4" AutomationProperties.Name="Волна последних секунд звука компьютера">
-                    <controls:LiveWaveView Source="{x:Bind Vm.LiveWave}" Divisions="{x:Bind Vm.ReplayDivisions, Mode=OneWay}" PeakBrush="{StaticResource XWave}" RmsBrush="{StaticResource XPrimary}" LineBrush="{StaticResource XWave}" TickBrush="{StaticResource XLine}" />
+                <Grid Grid.Column="1" RowDefinitions="*,Auto" RowSpacing="4" AutomationProperties.Name="Волны последних секунд по дорожкам: Discord, игра, голос">
+                    <controls:LiveTracksView Tracks="{x:Bind Vm.LiveTracks}" LabelBrush="{StaticResource XMuted}" Divisions="{x:Bind Vm.ReplayDivisions, Mode=OneWay}" PeakBrush="{StaticResource XWave}" RmsBrush="{StaticResource XPrimary}" LineBrush="{StaticResource XWave}" TickBrush="{StaticResource XLine}" />
                     <Rectangle Width="2" HorizontalAlignment="Right" Fill="{StaticResource XAccent}" Margin="0,-2,0,-2" />
-                    <Grid Grid.Row="1" ColumnDefinitions="*,*,*,Auto">
+                    <Grid Grid.Row="1" ColumnDefinitions="*,*,*,Auto" Margin="60,0,0,0">
                         <TextBlock FontFamily="{StaticResource XFontMono}" Text="{x:Bind Vm.ReplayTickFar, Mode=OneWay}" Style="{StaticResource XCap}" FontWeight="Normal" />
                         <TextBlock FontFamily="{StaticResource XFontMono}" Grid.Column="1" Text="{x:Bind Vm.ReplayTickMid, Mode=OneWay}" Style="{StaticResource XCap}" FontWeight="Normal" />
                         <TextBlock FontFamily="{StaticResource XFontMono}" Grid.Column="2" Text="{x:Bind Vm.ReplayTickNear, Mode=OneWay}" Style="{StaticResource XCap}" FontWeight="Normal" />
@@ -228,12 +228,7 @@
                                 <TextBlock Text="Запись" Style="{StaticResource XHead}" />
                                 <TextBlock Text="{x:Bind Vm.RecordHotkeyShort, Mode=OneWay}" Style="{StaticResource XCap}" HorizontalAlignment="Right" VerticalAlignment="Center" />
                             </Grid>
-                            <Grid ColumnDefinitions="*,*" Padding="3" Background="{StaticResource XBg}" CornerRadius="{Binding Control, Source={StaticResource Shape}}">
-                                <RadioButton Style="{StaticResource XSegment}" GroupName="RecSource" Content="Компьютер"
-                                             IsChecked="{x:Bind Vm.RecordFromSystem, Mode=TwoWay}" CornerRadius="{Binding Inner, Source={StaticResource Shape}}" />
-                                <RadioButton Grid.Column="1" Style="{StaticResource XSegment}" GroupName="RecSource" Content="Микрофон"
-                                             IsChecked="{x:Bind Vm.RecordFromMic, Mode=TwoWay}" CornerRadius="{Binding Inner, Source={StaticResource Shape}}" />
-                            </Grid>
+                            <TextBlock Text="Пишутся три дорожки: Discord, игра и голос" Style="{StaticResource XCap}" FontWeight="Normal" TextWrapping="Wrap" />
                             <StackPanel Orientation="Horizontal" Spacing="14">
                                 <Button Style="{StaticResource XButton}" Command="{x:Bind Vm.ToggleRecordingCommand}" Width="56" Height="56" Padding="0" CornerRadius="28"
                                         Background="{StaticResource XAccent}" Foreground="{StaticResource XOnAccent}"

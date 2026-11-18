@@ -302,6 +302,13 @@ public sealed class AudioEngine : IAudioEngine
         Reconfigure("пересборка потоков");
     });
 
+    /// <summary>Кому отдавать обработанный голос для записи (дорожка «Голос»).</summary>
+    public IVoiceTap? VoiceTap
+    {
+        get => mic.Tap;
+        set => mic.Tap = value;
+    }
+
     /// <inheritdoc />
     public MeterSnapshot ReadMeters()
     {

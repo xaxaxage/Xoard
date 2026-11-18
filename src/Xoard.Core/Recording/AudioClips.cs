@@ -113,10 +113,36 @@ public static class AudioClips
     public static float[] Slice(float[] stereo, double startSeconds, double endSeconds)
     {
         ArgumentNullException.ThrowIfNull(stereo);
-        var frames = stereo.Length / 2;
+        var (from, count) = Range(stereo.Length / 2, startSeconds, endSeconds);
+        return stereo.AsSpan(from * 2, count * 2).ToArray();
+    }
+
+    /// <summary>Кадры [start, end) секунд в пределах <paramref name="frames"/>: первый кадр и сколько.</summary>
+    public static (int From, int Count) Range(int frames, double startSeconds, double endSeconds)
+    {
         var from = (int)Math.Clamp(Math.Round(startSeconds * AudioFormat.SampleRate), 0, frames);
         var to = (int)Math.Clamp(Math.Round(endSeconds * AudioFormat.SampleRate), from, frames);
-        return stereo.AsSpan(from * 2, (to - from) * 2).ToArray();
+        return (from, to - from);
+    }
+
+    /// <summary>Наибольший уровень (0..1).</summary>
+    public static float PeakOf(ReadOnlySpan<float> samples)
+    {
+        var max = 0f;
+        foreach (var s in samples)
+            max = Math.Max(max, Math.Abs(s));
+        return max;
+    }
+
+    /// <summary>Свободное имя папки: «Имя», занято — «Имя (2)»; запрещённые символы — «-». Папка не создаётся.</summary>
+    public static string UniqueFolderPath(string parent, string name)
+    {
+        foreach (var c in Path.GetInvalidFileNameChars())
+            name = name.Replace(c, '-');
+        var candidate = Path.Combine(parent, name);
+        for (var i = 2; Directory.Exists(candidate) || File.Exists(candidate); i++)
+            candidate = Path.Combine(parent, $"{name} ({i})");
+        return candidate;
     }
 
     /// <summary>

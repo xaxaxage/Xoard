@@ -381,11 +381,11 @@
                                     <StackPanel>
                                         <Grid Style="{StaticResource FirstRow}" ColumnDefinitions="*,Auto">
                                             <StackPanel VerticalAlignment="Center" Spacing="2">
-                                                <TextBlock Text="Хранить последние секунды звука компьютера" Style="{StaticResource RowTitle}" />
+                                                <TextBlock Text="Хранить последние секунды по дорожкам" Style="{StaticResource RowTitle}" />
                                                 <TextBlock Text="{x:Bind Vm.ReplayStatusText, Mode=OneWay}" Style="{StaticResource RowHint}" />
                                             </StackPanel>
                                             <ToggleSwitch Grid.Column="1" IsOn="{x:Bind Vm.ReplayEnabled, Mode=TwoWay}" OnContent="" OffContent="" MinWidth="0"
-                                                          VerticalAlignment="Center" AutomationProperties.Name="Хранить последние секунды звука компьютера" />
+                                                          VerticalAlignment="Center" AutomationProperties.Name="Хранить последние секунды по дорожкам" />
                                         </Grid>
                                         <Grid Style="{StaticResource Row}" ColumnDefinitions="*,Auto,Auto">
                                             <StackPanel VerticalAlignment="Center" Spacing="2">
@@ -405,7 +405,7 @@
                             <Grid ColumnDefinitions="Auto,*" ColumnSpacing="12" Padding="14,12" Background="{StaticResource XSunken}" CornerRadius="{Binding Card, Source={StaticResource Shape}}">
                                 <TextBlock Text="i" Style="{StaticResource MonoValue}" FontSize="12" Foreground="{StaticResource XMuted}" VerticalAlignment="Top" />
                                 <TextBlock Grid.Column="1" Style="{StaticResource RowHint}" FontSize="13"
-                                           Text="Повтор хранится только в памяти (около 11 МБ на 30 с) и пишет всё, что играет компьютер, кроме самого Xoard. Запись и повтор из окна сначала открываются в редакторе: сохраните кусок, всё целиком или выбросьте." />
+                                           Text="Запись и повтор идут тремя дорожками: Discord, игра (весь остальной звук компьютера, кроме Discord и Xoard) и ваш голос — как его слышат друзья. Повтор хранится только в памяти (около 17 МБ на 30 с). Из окна запись и повтор открываются в редакторе: галочками выберите дорожки для общего звука; каждая дорожка сохраняется отдельным WAV в папке «Дорожки»." />
                             </Grid>
                         </StackPanel>
 

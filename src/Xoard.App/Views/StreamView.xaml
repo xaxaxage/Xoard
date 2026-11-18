@@ -53,12 +53,12 @@
                     <StackPanel Orientation="Horizontal" Spacing="10">
                         <Ellipse Width="8" Height="8" Fill="{StaticResource XRecording}" VerticalAlignment="Center" Visibility="{x:Bind Vm.ReplayEnabled, Mode=OneWay}" />
                         <TextBlock Text="{x:Bind Vm.ReplayTitle, Mode=OneWay}" Style="{StaticResource XHead}" />
-                        <TextBlock Text="звук компьютера, без звуков Xoard" Style="{StaticResource XSub}" VerticalAlignment="Center" />
+                        <TextBlock Text="Discord, игра и голос по дорожкам" Style="{StaticResource XSub}" VerticalAlignment="Center" />
                     </StackPanel>
-                    <Grid RowDefinitions="64,Auto" RowSpacing="4" AutomationProperties.Name="Волна последних секунд звука компьютера">
-                        <controls:LiveWaveView Source="{x:Bind Vm.LiveWave}" Divisions="{x:Bind Vm.ReplayDivisions, Mode=OneWay}" PeakBrush="{StaticResource XWave}" RmsBrush="{StaticResource XPrimary}" LineBrush="{StaticResource XWave}" TickBrush="{StaticResource XLine}" />
+                    <Grid RowDefinitions="96,Auto" RowSpacing="4" AutomationProperties.Name="Волны последних секунд по дорожкам: Discord, игра, голос">
+                        <controls:LiveTracksView Tracks="{x:Bind Vm.LiveTracks}" LabelBrush="{StaticResource XMuted}" Divisions="{x:Bind Vm.ReplayDivisions, Mode=OneWay}" PeakBrush="{StaticResource XWave}" RmsBrush="{StaticResource XPrimary}" LineBrush="{StaticResource XWave}" TickBrush="{StaticResource XLine}" />
                         <Rectangle Width="2" HorizontalAlignment="Right" Fill="{StaticResource XAccent}" Margin="0,-2,0,-2" />
-                        <Grid Grid.Row="1" ColumnDefinitions="*,*,*,Auto">
+                        <Grid Grid.Row="1" ColumnDefinitions="*,*,*,Auto" Margin="60,0,0,0">
                             <TextBlock FontFamily="{StaticResource XFontMono}" Text="{x:Bind Vm.ReplayTickFar, Mode=OneWay}" Style="{StaticResource XCap}" FontWeight="Normal" />
                             <TextBlock FontFamily="{StaticResource XFontMono}" Grid.Column="1" Text="{x:Bind Vm.ReplayTickMid, Mode=OneWay}" Style="{StaticResource XCap}" FontWeight="Normal" />
                             <TextBlock FontFamily="{StaticResource XFontMono}" Grid.Column="2" Text="{x:Bind Vm.ReplayTickNear, Mode=OneWay}" Style="{StaticResource XCap}" FontWeight="Normal" />
@@ -245,14 +245,6 @@
                                 </StackPanel>
                             </Flyout>
                         </Button.Flyout>
-                    </Button>
-                    <Rectangle Width="1" Height="26" Fill="{StaticResource XLine}" Margin="2,0" />
-                    <Button Style="{StaticResource XQuietButton}" Command="{x:Bind Vm.ToggleRecordSourceCommand}" Height="42" Foreground="{StaticResource XMuted}"
-                            CornerRadius="{Binding Control, Source={StaticResource Shape}}" ToolTipService.ToolTip="Что записывать: звук компьютера или микрофон">
-                        <StackPanel Orientation="Horizontal" Spacing="6">
-                            <FontIcon Glyph="{x:Bind Vm.RecordSourceGlyph, Mode=OneWay}" FontSize="13" />
-                            <TextBlock Text="{x:Bind Vm.RecordSourceShort, Mode=OneWay}" />
-                        </StackPanel>
                     </Button>
                 </StackPanel>
             </Border>

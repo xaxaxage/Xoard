@@ -1,120 +1,145 @@
 using System.Diagnostics;
+using System.Runtime.InteropServices;
 using NAudio.CoreAudioApi;
 using NAudio.Wave;
 using Xoard.Core.Audio;
 
 namespace Xoard.Core.Recording;
 
-/// <summary>Что записывать.</summary>
+/// <summary>Что записывать (старый выбор источника; теперь — какие дорожки идут в общий звук, см. <see cref="Tracks.For"/>).</summary>
 public enum RecordingSource
 {
-    /// <summary>Звук компьютера (всё, кроме самого Xoard).</summary>
+    /// <summary>Звук компьютера: дорожки «Discord» и «Игра».</summary>
     System,
 
-    /// <summary>Микрофон.</summary>
+    /// <summary>Микрофон: дорожка «Голос».</summary>
     Microphone,
 }
 
 /// <summary>
-/// Запись звука компьютера или микрофона и «повтор» — постоянный кольцевой буфер звука компьютера,
-/// из которого по клавише сохраняются последние N секунд.
-/// Звук компьютера пишется через петлю процессов БЕЗ собственного процесса (Windows 10 2004+):
-/// звуки Xoard не попадают в записи. На старых Windows — петля устройства вывода по умолчанию.
-/// Петля не присылает пакетов, пока тихо, поэтому паузы досыпаются тишиной по времени.
+/// Запись и «повтор» по трём дорожкам: Discord, игра (весь остальной звук компьютера, кроме Discord и
+/// Xoard) и голос (как его слышат друзья). Звук программ пишется петлями процессов (Windows 10 2004+),
+/// голос приходит от звукового движка (<see cref="IVoiceTap"/>). Все дорожки лежат на одной шкале
+/// времени (<see cref="TrackTimeline"/>), поэтому совпадают по времени; паузы без пакетов — тишина.
+/// Повтор — кольцо последних N секунд, из которого по клавише сохраняются дорожки.
 /// </summary>
-public sealed class RecordingService : IAsyncDisposable
+public sealed class RecordingService : IVoiceTap, IAsyncDisposable
 {
     /// <summary>Предел длины одной записи.</summary>
     public static readonly TimeSpan MaxRecording = TimeSpan.FromMinutes(10);
 
-    private readonly Lock gate = new();
-    private readonly Func<long> clock;
-    private readonly long ticksPerSecond;
-
-    // Захват звука компьютера (общий для повтора и записи)
-    private WasapiRecorder? systemRecorder;
-    private MMDevice? systemDevice;
-    private WaveFormat? systemFormat;
-    private int systemRate;
-    private long lastSystemTicks;
-    private float[] convertScratch = new float[48_000 * 2];
-
-    // Повтор
-    private float[]? ring;
-    private int ringCapacityFrames;
-    private long ringWritten;
-    private bool replayEnabled;
-    private int replaySeconds = 30;
-
-    // Живая волна повтора: пик каждых 50 мс за последние 2 минуты
-    private readonly PeakHistory livePeaks = new((int)(120 / LivePeakSeconds));
-    private readonly PeakHistory liveRms = new((int)(120 / LivePeakSeconds));
-    private float liveMax;
-    private double liveSumSquares;
-    private int liveFrames;
-
-    // Текущая запись
-    private RecordingSource? recording;
-    private List<float[]> chunks = [];
-    private long recordedFrames;
-    private int recordingRate;
-    private long recordingStartTicks;
-    private WasapiRecorder? micRecorder;
-    private MMDevice? micDevice;
-    private WaveFormat? micFormat;
-    private float recordingPeak;
-
-    public RecordingService()
-        : this(Stopwatch.GetTimestamp, Stopwatch.Frequency)
-    {
-    }
-
-    internal RecordingService(Func<long> clock, long ticksPerSecond)
-    {
-        this.clock = clock;
-        this.ticksPerSecond = ticksPerSecond;
-    }
-
     /// <summary>Длина одного отрезка живой волны, секунд.</summary>
     public const double LivePeakSeconds = 0.05;
 
+    private const int Rate = AudioFormat.SampleRate;
+    private const int BucketFrames = (int)(Rate * LivePeakSeconds);
+    private const int LiveLagFrames = Rate / 10;        // волна отстаёт на 0,1 с — чтобы пакеты успели прийти
+    private const long BaseFrames = Rate * 3600L;       // шкала начинается не с нуля — без отрицательных кадров
+    private static readonly TimeSpan SettleDelay = TimeSpan.FromMilliseconds(120);
+
+    private readonly Lock gate = new();
+    private readonly Func<long> clock;
+    private readonly long ticksPerSecond;
+    private readonly long origin;
+    private readonly Dictionary<TrackKind, TrackTimeline> timelines = Tracks.All.ToDictionary(k => k, _ => new TrackTimeline());
+    private readonly Dictionary<TrackKind, (PeakHistory Peaks, PeakHistory Rms)> live =
+        Tracks.All.ToDictionary(k => k, _ => (new PeakHistory((int)(120 / LivePeakSeconds)), new PeakHistory((int)(120 / LivePeakSeconds))));
+    private readonly AppAudioCaptures? apps;
+    private readonly SourcePlacer voicePlacer = new();
+    private Timer? appTimer;
+
+    private bool replayEnabled;
+    private int replaySeconds = 30;
+    private long replayStart;
+    private long liveBucket = -1;
+
+    private bool recording;
+    private IReadOnlyList<TrackKind>? recordingMix;
+    private long recordingStart;
+    private float recordingPeak;
+
+    public RecordingService()
+        : this(Stopwatch.GetTimestamp, Stopwatch.Frequency, captureApps: true)
+    {
+    }
+
+    /// <summary>Для тестов: свои часы и без петель программ.</summary>
+    internal RecordingService(Func<long> clock, long ticksPerSecond, bool captureApps)
+    {
+        this.clock = clock;
+        this.ticksPerSecond = ticksPerSecond;
+        origin = clock();
+        if (captureApps && AppAudioCaptures.Supported)
+        {
+            apps = new AppAudioCaptures();
+            apps.DataAvailable += OnAppData;
+        }
+    }
+
     /// <summary>
-    /// Последние пики звука компьютера (0..1, по 50 мс, новый — в конце) для живой волны.
-    /// Пока повтор выключен, волна пустая. Возвращает, сколько отрезков настоящих.
+    /// Последние пики дорожки (0..1, по 50 мс, новый — в конце) для живой волны. Пока повтор выключен,
+    /// волна пустая. Возвращает, сколько отрезков настоящих.
     /// </summary>
-    public int CopyLivePeaks(Span<float> dest) => livePeaks.CopyLatest(dest);
+    public int CopyLivePeaks(TrackKind track, Span<float> dest)
+    {
+        lock (gate)
+            return live[track].Peaks.CopyLatest(dest);
+    }
 
-    /// <summary>Средняя громкость (RMS, 0..1) тех же отрезков — для «плотной» части волны, как в аудиоредакторе.</summary>
-    public int CopyLiveRms(Span<float> dest) => liveRms.CopyLatest(dest);
+    /// <summary>Средняя громкость (RMS, 0..1) тех же отрезков — для «плотной» части волны.</summary>
+    public int CopyLiveRms(TrackKind track, Span<float> dest)
+    {
+        lock (gate)
+            return live[track].Rms.CopyLatest(dest);
+    }
 
-    /// <summary>Сколько отрезков живой волны записано за всё время: изменилось — пришёл новый (для плавной прокрутки).</summary>
-    public long LiveBucketsWritten => livePeaks.Written;
+    /// <summary>Сколько отрезков живой волны записано за всё время: изменилось — пришёл новый.</summary>
+    public long LiveBucketsWritten
+    {
+        get
+        {
+            lock (gate)
+                return live[TrackKind.Discord].Peaks.Written;
+        }
+    }
 
-    /// <summary>
-    /// Досыпать тишину за время без звука: в тишине Windows не присылает пакетов, и без этого живая
-    /// волна стояла бы на месте, а потом прыгала. Вызывать часто (каждый кадр) — дёшево.
-    /// </summary>
-    public void CatchUpSilence()
+    /// <summary>Досчитать отрезки живой волны до текущего момента. Вызывать часто (каждый кадр) — дёшево.</summary>
+    public void UpdateLive()
     {
         lock (gate)
         {
-            if (systemRecorder is not null && ring is not null)
-                PadSilenceToNow();
+            if (!replayEnabled)
+                return;
+            var target = (NowPos() - LiveLagFrames) / BucketFrames;
+            var capacity = live[TrackKind.Discord].Peaks.Capacity;
+            if (liveBucket < 0 || target - liveBucket > capacity)
+                liveBucket = Math.Max(liveBucket, target - capacity);
+            for (; liveBucket < target; liveBucket++)
+            {
+                foreach (var (kind, timeline) in timelines)
+                {
+                    var (peak, rms) = timeline.Measure(liveBucket * BucketFrames, BucketFrames);
+                    live[kind].Peaks.Add(peak);
+                    live[kind].Rms.Add(rms);
+                }
+            }
         }
     }
 
     /// <summary>Последняя ошибка (по-русски) или null.</summary>
-    public string? LastError { get; private set; }
+    public string? LastError => apps is null && !AppAudioCaptures.Supported
+        ? "Дорожки «Discord» и «Игра» нужна Windows 10 версии 2004 или новее — пишется только голос."
+        : apps?.LastError;
 
-    /// <summary>Звук компьютера пишется без звуков Xoard (петля процессов доступна).</summary>
-    public bool ExcludesOwnSounds { get; private set; }
+    /// <summary>Звук программ пишется по дорожкам (петли процессов доступны).</summary>
+    public bool CapturesApps => apps is not null;
 
     public bool ReplayEnabled
     {
         get
         {
             lock (gate)
-                return replayEnabled && ring is not null;
+                return replayEnabled;
         }
     }
 
@@ -133,11 +158,12 @@ public sealed class RecordingService : IAsyncDisposable
         get
         {
             lock (gate)
-                return ring is null || systemRate == 0 ? 0 : Math.Min(ringWritten, ringCapacityFrames) / (double)systemRate;
+                return replayEnabled ? Math.Min(NowPos() - replayStart, (long)replaySeconds * Rate) / (double)Rate : 0;
         }
     }
 
-    public RecordingSource? Recording
+    /// <summary>Идёт запись.</summary>
+    public bool IsRecording
     {
         get
         {
@@ -146,16 +172,26 @@ public sealed class RecordingService : IAsyncDisposable
         }
     }
 
+    /// <summary>Какие дорожки пойдут в общий звук, если запись сохранится сразу (null — не идёт).</summary>
+    public IReadOnlyList<TrackKind>? RecordingMix
+    {
+        get
+        {
+            lock (gate)
+                return recording ? recordingMix ?? Tracks.All : null;
+        }
+    }
+
     public TimeSpan RecordingElapsed
     {
         get
         {
             lock (gate)
-                return recording is null || recordingRate == 0 ? TimeSpan.Zero : TimeSpan.FromSeconds(recordedFrames / (double)recordingRate);
+                return recording ? TimeSpan.FromSeconds(Math.Min(NowPos() - recordingStart, MaxFrames) / (double)Rate) : TimeSpan.Zero;
         }
     }
 
-    /// <summary>Пик сигнала записи с прошлого вызова (0..1).</summary>
+    /// <summary>Пик записи (все дорожки) с прошлого вызова (0..1).</summary>
     public float TakeRecordingPeak()
     {
         lock (gate)
@@ -166,174 +202,149 @@ public sealed class RecordingService : IAsyncDisposable
         }
     }
 
+    /// <summary>Какие программы сейчас пишутся на дорожку (для подписей).</summary>
+    public IReadOnlyList<string> AppNames(TrackKind track) => apps?.Names(track) ?? [];
+
+    private static long MaxFrames => (long)(MaxRecording.TotalSeconds * Rate);
+
     /// <summary>Включить/выключить повтор и задать длину буфера (10–120 с).</summary>
     public async Task ConfigureReplayAsync(bool enabled, int seconds)
     {
         seconds = Math.Clamp(seconds, 10, 120);
         lock (gate)
         {
-            replayEnabled = enabled;
-            if (replaySeconds != seconds || !enabled)
+            if (enabled != replayEnabled || seconds != replaySeconds)
             {
-                ring = null;           // пересоздадим под новую длину
-                ringWritten = 0;
+                var now = NowPos();
+                foreach (var timeline in timelines.Values)
+                    timeline.SetRing(enabled ? seconds * Rate : 0, now);
+                replayStart = now;
+                liveBucket = -1;
+                foreach (var (peaks, rms) in live.Values)
+                {
+                    peaks.Clear();
+                    rms.Clear();
+                }
             }
 
-            if (!enabled)
-                livePeaks.Clear();
-                liveRms.Clear();
-
+            replayEnabled = enabled;
             replaySeconds = seconds;
         }
 
-        await UpdateSystemCaptureAsync().ConfigureAwait(false);
-    }
-
-    /// <summary>Начать запись.</summary>
-    /// <exception cref="InvalidOperationException">Уже идёт запись или не удалось открыть источник.</exception>
-    public async Task StartRecordingAsync(RecordingSource source, string? micDeviceId)
-    {
-        lock (gate)
-        {
-            if (recording is not null)
-                throw new InvalidOperationException("Запись уже идёт.");
-            chunks = [];
-            recordedFrames = 0;
-            recordingPeak = 0;
-            recordingStartTicks = clock();
-        }
-
-        if (source == RecordingSource.System)
-        {
-            lock (gate)
-                recording = RecordingSource.System;
-            await UpdateSystemCaptureAsync().ConfigureAwait(false);
-            lock (gate)
-            {
-                if (systemRecorder is null)
-                {
-                    recording = null;
-                    throw new InvalidOperationException(LastError ?? "Не удалось начать запись звука компьютера.");
-                }
-
-                recordingRate = systemRate;
-            }
-
-            return;
-        }
-
-        await Task.Run(() => StartMic(micDeviceId)).ConfigureAwait(false);
+        await UpdateCapturesAsync().ConfigureAwait(false);
     }
 
     /// <summary>
-    /// Остановить запись и сохранить WAV в папку. Возвращает путь или null, если записалось меньше 0,2 с.
+    /// Начать запись всех дорожек. <paramref name="mix"/> — какие дорожки войдут в общий звук при
+    /// сохранении сразу (по клавише, из Claude); null — все.
     /// </summary>
-    public async Task<string?> StopRecordingAsync(string folder, string? name)
+    /// <exception cref="InvalidOperationException">Запись уже идёт.</exception>
+    public async Task StartRecordingAsync(IReadOnlyList<TrackKind>? mix = null)
     {
+        lock (gate)
+        {
+            if (recording)
+                throw new InvalidOperationException("Запись уже идёт.");
+            recordingStart = NowPos();
+            foreach (var timeline in timelines.Values)
+                timeline.StartRecording(recordingStart, MaxFrames);
+            recordingMix = mix;
+            recordingPeak = 0;
+            recording = true;
+        }
+
+        await UpdateCapturesAsync().ConfigureAwait(false);
+    }
+
+    /// <summary>Остановить запись и отдать дорожки в памяти, без файлов — для редактора. null — меньше 0,2 с.</summary>
+    public async Task<MultiTrackClip?> StopRecordingClipAsync()
+    {
+        long end;
+        lock (gate)
+        {
+            if (!recording)
+                return null;
+            end = NowPos();
+        }
+
+        await Task.Delay(SettleDelay).ConfigureAwait(false);   // пакеты последних мгновений ещё в пути
+        List<ClipTrack> tracks;
+        long frames;
+        lock (gate)
+        {
+            frames = end - recordingStart;
+            tracks = [.. timelines.Select(t => new ClipTrack(t.Key, t.Value.StopRecording(end)))];
+            recording = false;
+        }
+
+        await UpdateCapturesAsync().ConfigureAwait(false);
+        return frames < Rate / 5 ? null : new MultiTrackClip(tracks, $"Запись {DateTime.Now:HH-mm-ss}");
+    }
+
+    /// <summary>
+    /// Остановить запись и сохранить сразу: дорожки — в «Дорожки\Имя», общий звук (дорожки из
+    /// <see cref="StartRecordingAsync"/>) — в папку звуков. null — записалось меньше 0,2 с.
+    /// </summary>
+    public async Task<(string? MixPath, string TracksFolder)?> StopRecordingAsync(string folder, string? name)
+    {
+        var mix = RecordingMix ?? Tracks.All;
         var clip = await StopRecordingClipAsync().ConfigureAwait(false);
         if (clip is null)
             return null;
-        var path = AudioClips.UniqueWavPath(folder, name ?? clip.SuggestedName);
-        await Task.Run(() => AudioClips.WriteWav(path, clip.Stereo, AudioFormat.SampleRate)).ConfigureAwait(false);
-        return path;
+        return await Task.Run(() => clip.SaveAs(folder, name ?? clip.SuggestedName, 0, clip.Seconds, mix)).ConfigureAwait(false);
     }
 
-    /// <summary>
-    /// Остановить запись и отдать её в памяти (48 кГц), без файла — для редактора клипа.
-    /// null — записалось меньше 0,2 с.
-    /// </summary>
-    public async Task<AudioClip?> StopRecordingClipAsync()
-    {
-        RecordingSource? source;
-        WasapiRecorder? mic;
-        MMDevice? device;
-        lock (gate)
-        {
-            source = recording;
-            mic = micRecorder;
-            device = micDevice;
-            micRecorder = null;
-            micDevice = null;
-        }
-
-        if (source is null)
-            return null;
-
-        if (mic is not null)
-        {
-            await Task.Run(() =>
-            {
-                mic.StopRecording();
-                mic.Dispose();
-                device?.Dispose();
-            }).ConfigureAwait(false);
-        }
-
-        float[] samples;
-        int rate;
-        lock (gate)
-        {
-            if (source == RecordingSource.System)
-                PadSilenceToNow();
-            recording = null;
-            rate = recordingRate;
-            samples = new float[recordedFrames * 2];
-            var offset = 0;
-            foreach (var chunk in chunks)
-            {
-                chunk.CopyTo(samples, offset);
-                offset += chunk.Length;
-            }
-
-            chunks = [];
-            recordedFrames = 0;
-        }
-
-        await UpdateSystemCaptureAsync().ConfigureAwait(false);
-        if (rate == 0 || samples.Length < rate / 5 * 2)
-            return null;
-
-        var normalized = await Task.Run(() => AudioClips.ToInternalRate(samples, rate)).ConfigureAwait(false);
-        return new AudioClip(normalized, $"Запись {DateTime.Now:HH-mm-ss}");
-    }
-
-    /// <summary>Сохранить последние <paramref name="seconds"/> секунд повтора как WAV.</summary>
+    /// <summary>Последние <paramref name="seconds"/> секунд повтора по дорожкам, без файлов — для редактора.</summary>
     /// <exception cref="InvalidOperationException">Повтор выключен или буфер пуст.</exception>
-    public async Task<string> SaveReplayAsync(double seconds, string folder, string? name)
+    public async Task<MultiTrackClip> TakeReplayClipAsync(double seconds)
+    {
+        long end;
+        lock (gate)
+        {
+            if (!replayEnabled)
+                throw new InvalidOperationException("Повтор выключен — включите его в настройках, раздел «Запись и повтор».");
+            end = NowPos();
+        }
+
+        await Task.Delay(SettleDelay).ConfigureAwait(false);
+        List<ClipTrack> tracks;
+        lock (gate)
+        {
+            var available = Math.Min(end - replayStart, (long)replaySeconds * Rate);
+            var frames = (int)Math.Min(available, Math.Max(1, Math.Round(seconds * Rate)));
+            if (frames < Rate / 5)
+                throw new InvalidOperationException("В буфере повтора пока почти ничего нет.");
+            tracks = [];
+            foreach (var (kind, timeline) in timelines)
+            {
+                var samples = new short[frames * 2];
+                timeline.Read(end - frames, samples);
+                tracks.Add(new ClipTrack(kind, samples));
+            }
+        }
+
+        return new MultiTrackClip(tracks, $"Повтор {DateTime.Now:HH-mm-ss}");
+    }
+
+    /// <summary>Сохранить последние <paramref name="seconds"/> секунд повтора сразу (дорожки и общий звук из <paramref name="mix"/>, null — все).</summary>
+    /// <exception cref="InvalidOperationException">Повтор выключен или буфер пуст.</exception>
+    /// <exception cref="ArgumentException">Во всех дорожках тишина.</exception>
+    public async Task<(string? MixPath, string TracksFolder)> SaveReplayAsync(double seconds, string folder, string? name, IReadOnlyList<TrackKind>? mix = null)
     {
         var clip = await TakeReplayClipAsync(seconds).ConfigureAwait(false);
-        var path = AudioClips.UniqueWavPath(folder, name ?? clip.SuggestedName);
-        await Task.Run(() => AudioClips.WriteWav(path, clip.Stereo, AudioFormat.SampleRate)).ConfigureAwait(false);
-        return path;
+        return await Task.Run(() => clip.SaveAs(folder, name ?? clip.SuggestedName, 0, clip.Seconds, mix ?? Tracks.All)).ConfigureAwait(false);
     }
 
-    /// <summary>Последние <paramref name="seconds"/> секунд повтора в памяти (48 кГц), без файла — для редактора клипа.</summary>
-    /// <exception cref="InvalidOperationException">Повтор выключен или буфер пуст.</exception>
-    public async Task<AudioClip> TakeReplayClipAsync(double seconds)
+    /// <inheritdoc />
+    public void OnVoice(ReadOnlySpan<float> stereo, int delayFrames)
     {
-        float[] samples;
-        int rate;
         lock (gate)
         {
-            if (!replayEnabled || ring is null || systemRate == 0)
-                throw new InvalidOperationException(LastError ?? "Повтор выключен — включите его на странице «Запись».");
-            PadSilenceToNow();
-            rate = systemRate;
-            var available = (int)Math.Min(ringWritten, ringCapacityFrames);
-            var frames = (int)Math.Min(available, Math.Max(1, Math.Round(seconds * rate)));
-            if (frames < rate / 5)
-                throw new InvalidOperationException("В буфере повтора пока почти ничего нет.");
-
-            samples = new float[frames * 2];
-            var start = (ringWritten - frames) % ringCapacityFrames;
-            var first = (int)Math.Min(frames, ringCapacityFrames - start);
-            Array.Copy(ring, start * 2, samples, 0, first * 2);
-            if (frames > first)
-                Array.Copy(ring, 0, samples, first * 2, (frames - first) * 2);
+            if (!replayEnabled && !recording)
+                return;
+            var pos = voicePlacer.Place(NowPos(), stereo.Length / 2, delayFrames);
+            Write(TrackKind.Voice, pos, stereo);
         }
-
-        var normalized = await Task.Run(() => AudioClips.ToInternalRate(samples, rate)).ConfigureAwait(false);
-        return new AudioClip(normalized, $"Повтор {DateTime.Now:HH-mm-ss}");
     }
 
     public async ValueTask DisposeAsync()
@@ -341,315 +352,78 @@ public sealed class RecordingService : IAsyncDisposable
         lock (gate)
         {
             replayEnabled = false;
-            recording = null;
+            recording = false;
         }
 
-        var mic = micRecorder;
-        micRecorder = null;
-        mic?.Dispose();
-        micDevice?.Dispose();
-        await UpdateSystemCaptureAsync().ConfigureAwait(false);
-    }
-
-    // ───────── захват звука компьютера ─────────
-
-    private async Task UpdateSystemCaptureAsync()
-    {
-        bool needed;
-        lock (gate)
-            needed = replayEnabled || recording == RecordingSource.System;
-
-        if (needed && systemRecorder is null)
-        {
-            await Task.Run(StartSystemCaptureAsync).ConfigureAwait(false);
-        }
-        else if (!needed && systemRecorder is not null)
-        {
-            var rec = systemRecorder;
-            var dev = systemDevice;
-            lock (gate)
-            {
-                systemRecorder = null;
-                systemDevice = null;
-                ring = null;
-                ringWritten = 0;
-            }
-
-            await Task.Run(() =>
-            {
-                rec.StopRecording();
-                rec.Dispose();
-                dev?.Dispose();
-            }).ConfigureAwait(false);
-        }
-
+        Timer? timer;
         lock (gate)
         {
-            if (replayEnabled && ring is null && systemRate > 0 && systemRecorder is not null)
-            {
-                ringCapacityFrames = replaySeconds * systemRate;
-                ring = new float[ringCapacityFrames * 2];
-                ringWritten = 0;
-            }
+            timer = appTimer;
+            appTimer = null;
         }
+
+        if (timer is not null)
+            await timer.DisposeAsync().ConfigureAwait(false);
+        if (apps is not null)
+            await apps.DisposeAsync().ConfigureAwait(false);
     }
 
-    private async Task StartSystemCaptureAsync()
+    // ───────── программы ─────────
+
+    /// <summary>Петли программ нужны, пока включён повтор или идёт запись.</summary>
+    private async Task UpdateCapturesAsync()
     {
-        WasapiRecorder? rec = null;
-        MMDevice? device = null;
-        try
-        {
-            if (OperatingSystem.IsWindowsVersionAtLeast(10, 0, 19041))
-            {
-                // Всё, что звучит в системе, кроме процессов самого Xoard
-                rec = await new WasapiRecorderBuilder()
-                    .WithProcessLoopback((uint)Environment.ProcessId, ProcessLoopbackMode.ExcludeTargetProcessTree)
-                    .WithFormat(WaveFormat.CreateIeeeFloatWaveFormat(AudioFormat.SampleRate, 2))
-                    .BuildAsync().ConfigureAwait(false);
-                ExcludesOwnSounds = true;
-            }
-        }
-        catch (Exception ex) when (ex is not OutOfMemoryException)
-        {
-            rec = null;
-            LastError = $"Петля процессов недоступна ({ex.Message}), пишу звук устройства вывода.";
-        }
-
-        try
-        {
-            if (rec is null)
-            {
-                using var enumerator = new MMDeviceEnumerator();
-                device = enumerator.GetDefaultAudioEndpoint(DataFlow.Render, Role.Multimedia);
-                rec = new WasapiRecorderBuilder().WithDevice(device).WithLoopbackCapture().Build();
-                ExcludesOwnSounds = false;
-            }
-
-            var format = rec.WaveFormat;
-            lock (gate)
-            {
-                systemFormat = format;
-                systemRate = format.SampleRate;
-                lastSystemTicks = clock();
-                systemRecorder = rec;
-                systemDevice = device;
-            }
-
-            rec.DataAvailable += OnSystemData;
-            rec.StartRecording();
-        }
-        catch (Exception ex) when (ex is not OutOfMemoryException)
-        {
-            LastError = $"Не удалось записывать звук компьютера: {ex.Message}";
-            lock (gate)
-            {
-                systemRecorder = null;
-                systemDevice = null;
-            }
-
-            rec?.Dispose();
-            device?.Dispose();
-        }
-    }
-
-    private void OnSystemData(ReadOnlySpan<byte> buffer, AudioClientBufferFlags flags, long position, long qpc)
-    {
-        var now = clock();
-        lock (gate)
-        {
-            if (systemFormat is null)
-                return;
-            var frames = StereoConverter.FramesIn(buffer.Length, systemFormat);
-            EnsureScratch(frames);
-            var stereo = convertScratch.AsSpan(0, frames * 2);
-            if ((flags & AudioClientBufferFlags.Silent) != 0)
-                stereo.Clear();
-            else
-                StereoConverter.Convert(buffer, systemFormat, stereo);
-
-            // Пауза без пакетов (никто не играл) — досыпаем тишиной
-            var elapsedFrames = (long)((now - lastSystemTicks) * (double)systemRate / ticksPerSecond);
-            var gap = elapsedFrames - frames;
-            if (gap > systemRate / 20)
-                WriteSystem(new float[Math.Min(gap, (long)systemRate * 130) * 2]);
-            lastSystemTicks = now;
-            WriteSystem(stereo);
-        }
-    }
-
-    /// <summary>Досыпать тишину за время без пакетов (под блокировкой).</summary>
-    private void PadSilenceToNow()
-    {
-        if (systemRate == 0)
+        if (apps is null)
             return;
-        var now = clock();
-        var gap = (long)((now - lastSystemTicks) * (double)systemRate / ticksPerSecond);
-        if (gap > systemRate / 20)
+        Timer? stopped = null;
+        lock (gate)
         {
-            WriteSystem(new float[Math.Min(gap, (long)systemRate * 130) * 2]);
-            lastSystemTicks = now;
+            var needed = replayEnabled || recording;
+            if (needed && appTimer is null)
+            {
+                appTimer = new Timer(_ => _ = apps.RefreshAsync(), null, TimeSpan.Zero, TimeSpan.FromSeconds(2));
+            }
+            else if (!needed && appTimer is not null)
+            {
+                stopped = appTimer;
+                appTimer = null;
+            }
+        }
+
+        if (stopped is not null)
+        {
+            await stopped.DisposeAsync().ConfigureAwait(false);
+            await apps.StopAllAsync().ConfigureAwait(false);
         }
     }
 
-    private void WriteSystem(ReadOnlySpan<float> stereo)
+    private void OnAppData(AppCapture capture, ReadOnlySpan<byte> buffer, AudioClientBufferFlags flags)
     {
-        if (ring is not null)
+        var samples = MemoryMarshal.Cast<byte, float>(buffer);
+        lock (gate)
         {
-            TrackLivePeaks(stereo);
-            var frames = stereo.Length / 2;
-            var offset = 0;
-            while (offset < frames)
-            {
-                var pos = (int)(ringWritten % ringCapacityFrames);
-                var count = Math.Min(frames - offset, ringCapacityFrames - pos);
-                stereo.Slice(offset * 2, count * 2).CopyTo(ring.AsSpan(pos * 2));
-                ringWritten += count;
-                offset += count;
-            }
-        }
-
-        if (recording == RecordingSource.System)
-            AppendRecording(stereo);
-    }
-
-    /// <summary>Пик каждого отрезка по 50 мс — для живой волны в окне (под блокировкой).</summary>
-    private void TrackLivePeaks(ReadOnlySpan<float> stereo)
-    {
-        var bucket = Math.Max(1, (int)(systemRate * LivePeakSeconds));
-        for (var i = 0; i + 1 < stereo.Length; i += 2)
-        {
-            var v = Math.Max(Math.Abs(stereo[i]), Math.Abs(stereo[i + 1]));
-            if (v > liveMax)
-                liveMax = v;
-            liveSumSquares += ((stereo[i] * stereo[i]) + (stereo[i + 1] * stereo[i + 1])) * 0.5;
-            if (++liveFrames >= bucket)
-            {
-                livePeaks.Add(Math.Min(1f, liveMax));
-                liveRms.Add((float)Math.Min(1.0, Math.Sqrt(liveSumSquares / liveFrames)));
-                liveMax = 0;
-                liveSumSquares = 0;
-                liveFrames = 0;
-            }
+            if (!replayEnabled && !recording)
+                return;
+            var pos = capture.Placer.Place(NowPos(), samples.Length / 2);
+            if ((flags & AudioClientBufferFlags.Silent) == 0)
+                Write(capture.Kind, pos, samples);
         }
     }
 
-    // ───────── микрофон ─────────
-
-    private void StartMic(string? deviceId)
+    /// <summary>Добавить звук на дорожку (под блокировкой).</summary>
+    private void Write(TrackKind kind, long pos, ReadOnlySpan<float> stereo)
     {
-        MMDevice? device = null;
-        WasapiRecorder? rec = null;
-        try
+        timelines[kind].Add(pos, stereo);
+        if (!recording)
+            return;
+        foreach (var s in stereo)
         {
-            using (var enumerator = new MMDeviceEnumerator())
-            {
-                device = deviceId is null
-                    ? enumerator.GetDefaultAudioEndpoint(DataFlow.Capture, Role.Console)
-                    : enumerator.GetDevice(deviceId);
-            }
-
-            rec = new WasapiRecorderBuilder().WithDevice(device).WithSharedMode().WithEventSync().WithBufferLength(100).Build();
-            var format = rec.WaveFormat;
-            lock (gate)
-            {
-                micFormat = format;
-                recordingRate = format.SampleRate;
-                micRecorder = rec;
-                micDevice = device;
-                recording = RecordingSource.Microphone;
-            }
-
-            rec.DataAvailable += (buffer, flags, _, _) =>
-            {
-                lock (gate)
-                {
-                    if (recording != RecordingSource.Microphone || micFormat is null)
-                        return;
-                    var frames = StereoConverter.FramesIn(buffer.Length, micFormat);
-                    EnsureScratch(frames);
-                    var stereo = convertScratch.AsSpan(0, frames * 2);
-                    if ((flags & AudioClientBufferFlags.Silent) != 0)
-                        stereo.Clear();
-                    else
-                        StereoConverter.Convert(buffer, micFormat, stereo);
-                    AppendRecording(stereo);
-                }
-            };
-            rec.StartRecording();
-        }
-        catch (Exception ex) when (ex is not OutOfMemoryException)
-        {
-            lock (gate)
-            {
-                recording = null;
-                micRecorder = null;
-                micDevice = null;
-            }
-
-            rec?.Dispose();
-            device?.Dispose();
-            var denied = ex is UnauthorizedAccessException || (uint)ex.HResult == 0x80070005;
-            throw new InvalidOperationException(denied
-                ? "Доступ к микрофону запрещён в параметрах конфиденциальности Windows."
-                : $"Не удалось начать запись с микрофона: {ex.Message}", ex);
-        }
-    }
-
-    // ───────── общее ─────────
-
-    private void AppendRecording(ReadOnlySpan<float> stereo)
-    {
-        if (recordingRate > 0 && recordedFrames >= (long)(MaxRecording.TotalSeconds * recordingRate))
-            return;   // предел длины: дальше не пишем
-        chunks.Add(stereo.ToArray());
-        recordedFrames += stereo.Length / 2;
-        for (var i = 0; i < stereo.Length; i++)
-        {
-            var a = Math.Abs(stereo[i]);
+            var a = Math.Abs(s);
             if (a > recordingPeak)
                 recordingPeak = a;
         }
     }
 
-    private void EnsureScratch(int frames)
-    {
-        if (convertScratch.Length < frames * 2)
-            convertScratch = new float[frames * 2];
-    }
-
-}
-
-/// <summary>Байты захвата (float32 / PCM 16/24/32, любые каналы) → стерео float.</summary>
-internal static class StereoConverter
-{
-    private static readonly Guid FloatSubFormat = new("00000003-0000-0010-8000-00aa00389b71");
-
-    public static int FramesIn(int bytes, WaveFormat format) => format.BlockAlign == 0 ? 0 : bytes / format.BlockAlign;
-
-    public static void Convert(ReadOnlySpan<byte> source, WaveFormat format, Span<float> stereo)
-    {
-        var isFloat = format.Encoding == WaveFormatEncoding.IeeeFloat
-            || (format is WaveFormatExtensible ext && ext.SubFormat == FloatSubFormat);
-        var bytesPerSample = format.BitsPerSample / 8;
-        var channels = format.Channels;
-        var frames = FramesIn(source.Length, format);
-        for (var f = 0; f < frames; f++)
-        {
-            var o = f * format.BlockAlign;
-            var left = Sample(source, o, isFloat, bytesPerSample);
-            var right = channels > 1 ? Sample(source, o + bytesPerSample, isFloat, bytesPerSample) : left;
-            stereo[2 * f] = left;
-            stereo[(2 * f) + 1] = right;
-        }
-    }
-
-    private static float Sample(ReadOnlySpan<byte> b, int o, bool isFloat, int bytes) => (isFloat, bytes) switch
-    {
-        (true, 4) => BitConverter.ToSingle(b.Slice(o, 4)),
-        (false, 2) => BitConverter.ToInt16(b.Slice(o, 2)) / 32768f,
-        (false, 3) => (b[o] | (b[o + 1] << 8) | ((sbyte)b[o + 2] << 16)) / 8388608f,
-        (false, 4) => BitConverter.ToInt32(b.Slice(o, 4)) / 2147483648f,
-        _ => 0f,
-    };
+    /// <summary>Текущий кадр шкалы времени.</summary>
+    private long NowPos() => BaseFrames + (long)((clock() - origin) * (double)Rate / ticksPerSecond);
 }

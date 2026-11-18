@@ -38,6 +38,8 @@ internal sealed class MicPassthrough
     private readonly float[] captureScratch = new float[MaxBlockFrames * AudioFormat.Channels];
     private readonly float[] ringScratch = new float[(MaxBlockFrames + 64) * AudioFormat.Channels];
     private readonly float[] outScratch = new float[MaxBlockFrames * AudioFormat.Channels];
+    private readonly float[] silence = new float[MaxBlockFrames * AudioFormat.Channels];
+    private IVoiceTap? tap;
     private readonly long ticksPerSecond;
     private readonly Func<long> clock;
 
@@ -130,6 +132,13 @@ internal sealed class MicPassthrough
     /// <summary>Шумоподавление и выравнивание громкости голоса. Можно звать с любого потока.</summary>
     public void SetVoiceProcessing(bool noiseSuppression, bool autoLevel) => voice.Configure(noiseSuppression, autoLevel);
 
+    /// <summary>Кому отдавать обработанный голос для записи (null — никому). Можно менять с любого потока.</summary>
+    public IVoiceTap? Tap
+    {
+        get => Volatile.Read(ref tap);
+        set => Volatile.Write(ref tap, value);
+    }
+
     /// <summary>Громкость голоса (линейная) и мягкое выключение. Можно звать с любого потока.</summary>
     public void SetGain(float linear, bool isMuted)
     {
@@ -190,6 +199,8 @@ internal sealed class MicPassthrough
 
             inputMeter.Process(dest);
             voice.Process(dest);
+            if (Volatile.Read(ref tap) is { } voiceTap)
+                voiceTap.OnVoice(Volatile.Read(ref muted) ? silence.AsSpan(0, dest.Length) : dest, voice.Available ? VoiceProcessor.LatencyFrames : 0);
             var written = ring.Write(dest);
             if (written < frames)
                 Interlocked.Add(ref droppedFrames, frames - written);

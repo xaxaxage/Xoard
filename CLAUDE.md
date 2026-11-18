@@ -24,7 +24,8 @@ on first start, see `src/Xoard.Core/Shell/LegacyMigration.cs`).
     right, cable/update status at the bottom left (`Views/SettingsSheet`). The user picked it over a single long
     page. Few-option settings are segments (L+R / L / R, Поверх / Заново), group labels are mono caps.
   - **Three layouts, chosen in settings**: Пульт (grid + right column), Док (big tiles + floating bottom bar),
-    Лента (one column, list). All show a **live waveform of the last 30 s** (replay buffer) moving in the window.
+    Лента (one column, list). All show a **live waveform of the last 30 s** (replay buffer) moving in the window,
+    as three lanes — Discord / Игра / Голос (`Controls/LiveTracksView`).
   - **Palettes** from the trackers (Гавань, Матча, Ягода, Океан, Лаванда, Графит, Ночь, Эспрессо, OLED) plus two in
     the logo's colors (Xoard, Xoard ночь) and **Авто** (Xoard by day, Xoard ночь with dark Windows). Brushes are
     changed in place (`Theme/ThemeManager.cs`), stock WinUI keys are mapped to palette brushes. **Yellow Xoard is
@@ -44,6 +45,15 @@ on first start, see `src/Xoard.Core/Shell/LegacyMigration.cs`).
   to −18 dBFS speech at 100 % (`VoiceProcessor`), its own −1 dBFS limiter after the slider. Two switches in
   settings, both on. The DLL is built **locally with portable Zig** by `Native/build-rnnoise.cmd` — not GitHub
   Actions: the user's `gh` login has no `workflow` scope (they declined it), so never add workflow files.
+- **Recording and replay are multi-track (Nov 2026, the user's request).** Three tracks on one timeline
+  (`Recording/TrackTimeline`, 16-bit): **Discord**, **Игра** = everything else the PC plays except Discord and
+  Xoard (the user: "which program is the game — that's your job", so no guessing: every app with an audio session
+  gets its own process-loopback capture, `AppAudioCaptures`; Xoard's own tree, its ancestors such as Explorer, and
+  apps whose ancestor is already captured are skipped), and **Голос** = the processed voice as friends hear it
+  (`IVoiceTap` from the mic path; silence when muted). Saving writes each non-silent track as a WAV into
+  `<sounds>\Дорожки\<name>\` (the library reads only the top level) plus a mixed sound in the list; the editor
+  has per-track checkboxes for the mix. The old "Компьютер / Микрофон" source switch is gone; MCP `source` now
+  only picks the mix (system = Discord + Игра, mic = Голос).
 - **Clips go through an editor.** Recording and «Сохранить» (replay) from the window open `ClipEditor` with the
   clip in memory: «Сохранить выделенное», «Сохранить целиком», «Выбросить», «Сбросить выделение». No file until the
   user saves. Hotkeys (in a game) and MCP still save straight to a file. Trim uses the same editor.

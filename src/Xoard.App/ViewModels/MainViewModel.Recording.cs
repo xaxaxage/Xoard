@@ -38,11 +38,16 @@ public sealed record HotkeyTarget(HotkeyKind Kind, SoundItem? Sound = null)
 
 /// <summary>
 /// Клип для редактора: новая запись или повтор (ещё не файл) либо звук, который обрезают
-/// (<paramref name="TrimTarget"/>).
+/// (<paramref name="TrimTarget"/>). У записи и повтора есть дорожки (<paramref name="Tracks"/>),
+/// <paramref name="Clip"/> — их общий звук.
 /// </summary>
-public sealed record ClipDraft(AudioClip Clip, SoundItem? TrimTarget, string Title, string Subtitle)
+public sealed record ClipDraft(AudioClip Clip, SoundItem? TrimTarget, string Title, string Subtitle, MultiTrackClip? Tracks = null)
 {
     public bool IsTrim => TrimTarget is not null;
+
+    /// <summary>Запись или повтор по дорожкам: общий звук из всех дорожек.</summary>
+    public static ClipDraft FromTracks(MultiTrackClip tracks, string title, string subtitle) =>
+        new(tracks.Mix(Xoard.Core.Recording.Tracks.All), null, title, subtitle, tracks);
 }
 
 /// <summary>Запись, повтор и обрезка.</summary>
@@ -66,9 +71,6 @@ public sealed partial class MainViewModel
     public partial double RecordingMeter { get; set; }
 
     [ObservableProperty]
-    public partial int RecordSourceIndex { get; set; }
-
-    [ObservableProperty]
     public partial bool ReplayEnabled { get; set; }
 
     [ObservableProperty]
@@ -83,10 +85,6 @@ public sealed partial class MainViewModel
 
     public string ReplaySaveText => $"Сохранить последние {ReplaySeconds:0} с";
 
-    public string RecordSourceHint => RecordSourceIndex == 0
-        ? "Пишется всё, что звучит в компьютере (видео, игры, Discord), кроме звуков самого Xoard."
-        : "Пишется микрофон из настроек.";
-
     public bool IsNotRecording => !IsRecording;
 
     partial void OnIsRecordingChanged(bool value)
@@ -94,19 +92,6 @@ public sealed partial class MainViewModel
         OnPropertyChanged(nameof(IsNotRecording));
         OnPropertyChanged(nameof(RecordButtonText));
         OnPropertyChanged(nameof(RecordButtonGlyph));
-    }
-
-    partial void OnRecordSourceIndexChanged(int value)
-    {
-        OnPropertyChanged(nameof(RecordSourceHint));
-        OnPropertyChanged(nameof(RecordFromSystem));
-        OnPropertyChanged(nameof(RecordFromMic));
-        OnPropertyChanged(nameof(RecordSourceShort));
-        OnPropertyChanged(nameof(RecordSourceGlyph));
-        if (suppressSettings)
-            return;
-        config = config with { RecordSource = value == 1 ? RecordingSource.Microphone : RecordingSource.System };
-        ScheduleSave();
     }
 
     partial void OnReplayEnabledChanged(bool value)
@@ -135,8 +120,8 @@ public sealed partial class MainViewModel
         suppressSettings = true;
         ReplayEnabled = config.ReplayEnabled;
         ReplaySeconds = Math.Clamp(config.ReplaySeconds, 10, 120);
-        RecordSourceIndex = config.RecordSource == RecordingSource.Microphone ? 1 : 0;
         suppressSettings = false;
+        engine.VoiceTap = recorder;
         await ApplyReplayAsync().ConfigureAwait(true);
     }
 
@@ -164,10 +149,9 @@ public sealed partial class MainViewModel
         recordingBusy = true;
         try
         {
-            if (recorder.Recording is null)
+            if (!recorder.IsRecording)
             {
-                var source = RecordSourceIndex == 1 ? RecordingSource.Microphone : RecordingSource.System;
-                await recorder.StartRecordingAsync(source, config.Audio.MicDeviceId).ConfigureAwait(true);
+                await recorder.StartRecordingAsync().ConfigureAwait(true);
                 IsRecording = true;
                 if (fromHotkey)
                     ShowToast("Запись началась — нажмите клавишу ещё раз, чтобы остановить.", InfoBarSeverity.Informational);
@@ -176,7 +160,6 @@ public sealed partial class MainViewModel
 
             if (!fromHotkey)
             {
-                var source = recorder.Recording == RecordingSource.Microphone ? "Микрофон" : "Звук компьютера";
                 var clip = await recorder.StopRecordingClipAsync().ConfigureAwait(true);
                 IsRecording = false;
                 if (clip is null)
@@ -185,25 +168,23 @@ public sealed partial class MainViewModel
                     return null;
                 }
 
-                ClipEditRequested?.Invoke(new ClipDraft(clip, null, "Новая запись", $"{source} · {Clock(clip.Seconds)}"));
+                ClipEditRequested?.Invoke(ClipDraft.FromTracks(clip, "Новая запись", $"{TrackSummary(clip)} · {Clock(clip.Seconds)}"));
                 return null;
             }
 
-            var path = await recorder.StopRecordingAsync(library.Folder, name).ConfigureAwait(true);
+            var saved = await recorder.StopRecordingAsync(library.Folder, name).ConfigureAwait(true);
             IsRecording = false;
-            if (path is null)
+            if (saved is null)
             {
                 ShowToast("Запись слишком короткая — ничего не сохранено.", InfoBarSeverity.Warning);
                 return null;
             }
 
-            var item = AddRecordedFile(path);
-            ShowToast($"Запись сохранена: «{item.Name}».", InfoBarSeverity.Success);
-            return item;
+            return AddSavedTracksOrNull(saved.Value, "Запись");
         }
-        catch (InvalidOperationException ex)
+        catch (Exception ex) when (ex is InvalidOperationException or ArgumentException or IOException or UnauthorizedAccessException)
         {
-            IsRecording = recorder.Recording is not null;
+            IsRecording = recorder.IsRecording;
             ShowToast(ex.Message, InfoBarSeverity.Error);
             return null;
         }
@@ -223,20 +204,47 @@ public sealed partial class MainViewModel
             if (!fromHotkey)
             {
                 var clip = await recorder.TakeReplayClipAsync(seconds ?? ReplaySeconds).ConfigureAwait(true);
-                ClipEditRequested?.Invoke(new ClipDraft(clip, null, "Повтор", $"Звук компьютера · последние {Clock(clip.Seconds)}"));
+                ClipEditRequested?.Invoke(ClipDraft.FromTracks(clip, "Повтор", $"{TrackSummary(clip)} · последние {Clock(clip.Seconds)}"));
                 return null;
             }
 
-            var path = await recorder.SaveReplayAsync(seconds ?? ReplaySeconds, library.Folder, name).ConfigureAwait(true);
-            var item = AddRecordedFile(path);
-            ShowToast($"Повтор сохранён: «{item.Name}».", InfoBarSeverity.Success);
-            return item;
+            var saved = await recorder.SaveReplayAsync(seconds ?? ReplaySeconds, library.Folder, name).ConfigureAwait(true);
+            return AddSavedTracksOrNull(saved, "Повтор");
         }
-        catch (InvalidOperationException ex)
+        catch (Exception ex) when (ex is InvalidOperationException or ArgumentException or IOException or UnauthorizedAccessException)
         {
             ShowToast(ex.Message, InfoBarSeverity.Warning);
             return null;
         }
+    }
+
+    /// <summary>
+    /// Дорожки сохранены: общий звук — новой плиткой, про папку дорожек — в подсказке.
+    /// null — общий звук пуст (сохранились только дорожки).
+    /// </summary>
+    private SoundItem? AddSavedTracksOrNull((string? MixPath, string TracksFolder) saved, string what)
+    {
+        var folder = $"{MultiTrackClip.TracksFolderName}\\{Path.GetFileName(saved.TracksFolder)}";
+        if (saved.MixPath is null)
+        {
+            ShowToast($"{what}: общий звук пуст, дорожки сохранены в «{folder}».", InfoBarSeverity.Warning);
+            return null;
+        }
+
+        var item = AddRecordedFile(saved.MixPath);
+        ShowToast($"{what}: «{item.Name}» в звуках, дорожки — в «{folder}».", InfoBarSeverity.Success);
+        return item;
+    }
+
+    /// <summary>«Discord, Игра, Голос» — какие дорожки не пустые (и какие программы на «Игре»).</summary>
+    private string TrackSummary(MultiTrackClip clip)
+    {
+        var parts = clip.Tracks.Where(t => !t.IsSilent).Select(t => t.Title).ToList();
+        if (parts.Count == 0)
+            return "Везде тишина";
+        var games = recorder.AppNames(TrackKind.Game);
+        var summary = string.Join(", ", parts);
+        return games.Count > 0 && parts.Contains(Tracks.Title(TrackKind.Game)) ? $"{summary} ({string.Join(", ", games.Take(3))})" : summary;
     }
 
     /// <summary>Файл уже в папке звуков — добавить плитку и загрузить.</summary>
@@ -267,12 +275,22 @@ public sealed partial class MainViewModel
         }
     }
 
-    /// <summary>Сохранить клип (весь или кусок [start, end)) новым звуком. Возвращает текст ошибки или null.</summary>
-    public async Task<string?> SaveClipAsync(ClipDraft draft, string name, double start, double end)
+    /// <summary>
+    /// Сохранить клип (весь или кусок [start, end)) новым звуком; у записи и повтора — ещё и дорожки,
+    /// а общий звук — из дорожек <paramref name="include"/>. Возвращает текст ошибки или null.
+    /// </summary>
+    public async Task<string?> SaveClipAsync(ClipDraft draft, string name, double start, double end, IReadOnlyCollection<TrackKind>? include = null)
     {
         try
         {
             var folder = library.Folder;
+            if (draft.Tracks is { } tracks)
+            {
+                var saved = await Task.Run(() => tracks.SaveAs(folder, name, start, end, include ?? Tracks.All)).ConfigureAwait(true);
+                AddSavedTracksOrNull(saved, "Сохранено");
+                return null;
+            }
+
             var path = await Task.Run(() => draft.Clip.SaveAs(folder, name, start, end)).ConfigureAwait(true);
             var item = AddRecordedFile(path);
             ShowToast($"Сохранено: «{item.Name}».", InfoBarSeverity.Success);
@@ -374,7 +392,7 @@ public sealed partial class MainViewModel
     /// <summary>Таймер окна: время записи, уровень, заполнение повтора.</summary>
     private void UpdateRecordingUi()
     {
-        var recording = recorder.Recording is not null;
+        var recording = recorder.IsRecording;
         if (IsRecording != recording)
             IsRecording = recording;
         if (recording)
@@ -394,8 +412,8 @@ public sealed partial class MainViewModel
         ReplayStatusText = !ReplayEnabled
             ? "Повтор выключен."
             : recorder.ReplayEnabled
-                ? $"В буфере {recorder.ReplayBufferedSeconds:0} из {ReplaySeconds:0} с" +
-                  (recorder.ExcludesOwnSounds ? " · без звуков Xoard" : "")
+                ? $"В буфере {recorder.ReplayBufferedSeconds:0} из {ReplaySeconds:0} с · " +
+                  (recorder.CapturesApps ? "Discord, игра и голос по дорожкам" : "только голос")
                 : "Повтор не запущен" + (recorder.LastError is { } e ? $": {e}" : ".");
     }
 }
