@@ -21,6 +21,10 @@
                 </StackPanel>
             </Grid>
 
+            <!-- Запись и повтор: все дорожки вместе или одна (кнопки строятся в коде) -->
+            <Grid x:Name="TrackSwitch" Padding="3" HorizontalAlignment="Left" Background="{StaticResource XSunken}"
+                  CornerRadius="{Binding Control, Source={StaticResource Shape}}" Visibility="Collapsed" />
+
             <!-- Волна: тяните края выделения или выделите кусок мышкой -->
             <Grid x:Name="WaveArea" Height="180" Background="{StaticResource XBg}" BorderBrush="{StaticResource XLine}" BorderThickness="1"
                   CornerRadius="{Binding Control, Source={StaticResource Shape}}" SizeChanged="OnWaveSizeChanged">
@@ -29,9 +33,6 @@
                         AutomationProperties.Name="Волна клипа: выделите кусок мышкой" />
             </Grid>
             <Canvas x:Name="Ruler" Height="16" Margin="1,-6,1,0" />
-
-            <!-- Дорожки: галочка — входит ли дорожка в общий звук; каждая сохраняется отдельным WAV -->
-            <StackPanel x:Name="TrackPanel" Spacing="4" Visibility="Collapsed" />
 
             <!-- Отсчёты -->
             <Grid ColumnDefinitions="*,Auto">

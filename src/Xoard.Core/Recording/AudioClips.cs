@@ -125,25 +125,6 @@ public static class AudioClips
         return (from, to - from);
     }
 
-    /// <summary>Наибольший уровень (0..1).</summary>
-    public static float PeakOf(ReadOnlySpan<float> samples)
-    {
-        var max = 0f;
-        foreach (var s in samples)
-            max = Math.Max(max, Math.Abs(s));
-        return max;
-    }
-
-    /// <summary>Свободное имя папки: «Имя», занято — «Имя (2)»; запрещённые символы — «-». Папка не создаётся.</summary>
-    public static string UniqueFolderPath(string parent, string name)
-    {
-        foreach (var c in Path.GetInvalidFileNameChars())
-            name = name.Replace(c, '-');
-        var candidate = Path.Combine(parent, name);
-        for (var i = 2; Directory.Exists(candidate) || File.Exists(candidate); i++)
-            candidate = Path.Combine(parent, $"{name} ({i})");
-        return candidate;
-    }
 
     /// <summary>
     /// Обрезает файл звука до [start, end) секунд и сохраняет как WAV в <paramref name="destinationPath"/>.

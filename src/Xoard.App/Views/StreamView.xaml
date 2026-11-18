@@ -58,7 +58,7 @@
                     <Grid RowDefinitions="96,Auto" RowSpacing="4" AutomationProperties.Name="Волны последних секунд по дорожкам: Discord, игра, голос">
                         <controls:LiveTracksView Tracks="{x:Bind Vm.LiveTracks}" LabelBrush="{StaticResource XMuted}" Divisions="{x:Bind Vm.ReplayDivisions, Mode=OneWay}" PeakBrush="{StaticResource XWave}" RmsBrush="{StaticResource XPrimary}" LineBrush="{StaticResource XWave}" TickBrush="{StaticResource XLine}" />
                         <Rectangle Width="2" HorizontalAlignment="Right" Fill="{StaticResource XAccent}" Margin="0,-2,0,-2" />
-                        <Grid Grid.Row="1" ColumnDefinitions="*,*,*,Auto" Margin="60,0,0,0">
+                        <Grid Grid.Row="1" ColumnDefinitions="*,*,*,Auto" Margin="76,0,0,0">
                             <TextBlock FontFamily="{StaticResource XFontMono}" Text="{x:Bind Vm.ReplayTickFar, Mode=OneWay}" Style="{StaticResource XCap}" FontWeight="Normal" />
                             <TextBlock FontFamily="{StaticResource XFontMono}" Grid.Column="1" Text="{x:Bind Vm.ReplayTickMid, Mode=OneWay}" Style="{StaticResource XCap}" FontWeight="Normal" />
                             <TextBlock FontFamily="{StaticResource XFontMono}" Grid.Column="2" Text="{x:Bind Vm.ReplayTickNear, Mode=OneWay}" Style="{StaticResource XCap}" FontWeight="Normal" />

@@ -64,7 +64,7 @@ public sealed class XoardTools(ControlClient client)
         CallAsync(ControlCommands.SetHotkey, new SetHotkeyArgs(target, hotkey), cancellationToken);
 
     [McpServerTool(Name = "start_recording")]
-    [Description("Start recording. Three tracks are always recorded: Discord (friends' voices), Game (everything else the computer plays except Discord and Xoard) and Voice (the user's cleaned-up voice). source picks what goes into the saved sound: \"system\" = Discord + Game, \"mic\" = Voice only. Each non-silent track is also saved as its own WAV in the sounds folder's Дорожки subfolder.")]
+    [Description("Start recording. Three tracks are always recorded: Discord (friends' voices), Game (everything else the computer plays except Discord and Xoard) and Voice (the user's cleaned-up voice). source picks what goes into the saved sound (one file): \"system\" = Discord + Game, \"mic\" = Voice only.")]
     public Task<string> StartRecording(
         [Description("system or mic")] string source = "system",
         CancellationToken cancellationToken = default) =>
@@ -78,7 +78,7 @@ public sealed class XoardTools(ControlClient client)
         CallAsync(ControlCommands.StopRecording, new SaveSoundArgs(name), cancellationToken);
 
     [McpServerTool(Name = "save_last_seconds")]
-    [Description("Save the last N seconds of the always-on replay buffer (30 s by default) as a new sound mixing all three tracks (Discord, Game, Voice) — e.g. a funny moment that just happened. Each non-silent track is also saved as its own WAV in the sounds folder's Дорожки subfolder.")]
+    [Description("Save the last N seconds of the always-on replay buffer (30 s by default) as a new sound mixing all three tracks (Discord, Game, Voice) — e.g. a funny moment that just happened.")]
     public Task<string> SaveLastSeconds(
         [Description("How many seconds to save (up to the replay buffer length).")] double seconds,
         [Description("Name for the new sound (optional).")] string? name = null,

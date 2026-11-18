@@ -160,10 +160,10 @@ public sealed partial class MainViewModel : IXoardControl
     {
         if (!recorder.IsRecording)
             throw new ControlException(ControlErrorCodes.BadRequest, "Запись не идёт — сначала start_recording.");
-        (string? MixPath, string TracksFolder)? saved;
+        string? path;
         try
         {
-            saved = await recorder.StopRecordingAsync(library.Folder, CleanName(args.Name)).ConfigureAwait(true);
+            path = await recorder.StopRecordingAsync(library.Folder, CleanName(args.Name)).ConfigureAwait(true);
         }
         catch (Exception ex) when (ex is ArgumentException or IOException or UnauthorizedAccessException)
         {
@@ -172,26 +172,28 @@ public sealed partial class MainViewModel : IXoardControl
         }
 
         IsRecording = false;
-        if (saved is null)
+        if (path is null)
             throw new ControlException(ControlErrorCodes.Unavailable, "Запись слишком короткая — ничего не сохранено.");
-        var item = AddSavedTracks(saved.Value, "Запись");
+        var item = AddRecordedFile(path);
+        ShowToast($"Запись сохранена: «{item.Name}».", InfoBarSeverity.Success);
         return await LoadedInfoAsync(item).ConfigureAwait(true);
     });
 
     public Task<SoundInfo> SaveLastSecondsAsync(SaveSoundArgs args, CancellationToken ct) => OnUiAsync(async () =>
     {
         var seconds = args.Seconds > 0 ? args.Seconds : ReplaySeconds;
-        (string? MixPath, string TracksFolder) saved;
+        string path;
         try
         {
-            saved = await recorder.SaveReplayAsync(seconds, library.Folder, CleanName(args.Name)).ConfigureAwait(true);
+            path = await recorder.SaveReplayAsync(seconds, library.Folder, CleanName(args.Name)).ConfigureAwait(true);
         }
         catch (Exception ex) when (ex is InvalidOperationException or ArgumentException or IOException or UnauthorizedAccessException)
         {
             throw new ControlException(ControlErrorCodes.Unavailable, ex.Message);
         }
 
-        var item = AddSavedTracks(saved, "Повтор");
+        var item = AddRecordedFile(path);
+        ShowToast($"Повтор сохранён: «{item.Name}».", InfoBarSeverity.Success);
         return await LoadedInfoAsync(item).ConfigureAwait(true);
     });
 
@@ -222,11 +224,6 @@ public sealed partial class MainViewModel : IXoardControl
             throw new ControlException(ControlErrorCodes.BadRequest, error);
         return await LoadedInfoAsync(item).ConfigureAwait(true);
     });
-
-    /// <summary>Сохранённые дорожки для Claude: общий звук обязателен — его и возвращаем.</summary>
-    private SoundItem AddSavedTracks((string? MixPath, string TracksFolder) saved, string what) =>
-        AddSavedTracksOrNull(saved, what)
-        ?? throw new ControlException(ControlErrorCodes.Unavailable, $"Общий звук пуст — сохранены только дорожки в «{saved.TracksFolder}».");
 
     private RecordingInfo RecordingState() => new(
         recorder.IsRecording,

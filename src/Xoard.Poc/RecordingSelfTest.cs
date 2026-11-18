@@ -78,20 +78,12 @@ internal static class RecordingSelfTest
             }
 
             Thread.Sleep(1500);
-            var saved = service.SaveReplayAsync(7, folder, "test").GetAwaiter().GetResult();
-            var gamePath = Path.Combine(saved.TracksFolder, Tracks.Title(TrackKind.Game) + ".wav");
-            if (!File.Exists(gamePath))
-            {
-                Ui.Error($"✗ Дорожка «Игра» пустая. Петли: {string.Join(", ", service.AppNames(TrackKind.Game))}; {service.LastError}");
-                return 5;
-            }
-
+            var gamePath = service.SaveReplayAsync(7, folder, "test", [TrackKind.Game]).GetAwaiter().GetResult();
             var sound = SoundDecoder.Decode(gamePath, TimeSpan.FromMinutes(1));
             var otherDb = Level(sound.Samples, 700);
             var ownDb = Level(sound.Samples, 1000);
             Ui.Info($"  Дорожка «Игра» ({string.Join(", ", service.AppNames(TrackKind.Game))}): чужой звук 700 Гц {otherDb:0.0} dBFS, " +
                     $"свой 1000 Гц {ownDb:0.0} dBFS, длина {sound.Duration.TotalSeconds:0.0} с");
-            Ui.Info($"  Файлы: {string.Join(", ", Directory.GetFiles(saved.TracksFolder).Select(Path.GetFileName))}");
 
             // Свой тон, если бы попал, был бы около playedDb; ниже на 12+ дБ — только утечка от чужого тона
             var ok = otherDb > playedDb - 6 && ownDb < playedDb - 12;

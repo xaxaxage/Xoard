@@ -56,17 +56,6 @@ public sealed record ClipTrack(TrackKind Kind, short[] Stereo)
     /// <summary>В дорожке ничего не звучало.</summary>
     public bool IsSilent => Peak < SilentPeak;
 
-    /// <summary>Кусок [start, end) секунд как стерео float.</summary>
-    public float[] ToFloat(double startSeconds, double endSeconds)
-    {
-        var (from, count) = AudioClips.Range(Stereo.Length / 2, startSeconds, endSeconds);
-        var result = new float[count * 2];
-        var source = Stereo.AsSpan(from * 2, count * 2);
-        for (var i = 0; i < source.Length; i++)
-            result[i] = source[i] / 32768f;
-        return result;
-    }
-
     private float ComputePeak()
     {
         var max = 0;
@@ -87,9 +76,6 @@ public sealed record ClipTrack(TrackKind Kind, short[] Stereo)
 /// </summary>
 public sealed record MultiTrackClip(IReadOnlyList<ClipTrack> Tracks, string SuggestedName)
 {
-    /// <summary>Подпапка папки звуков, куда кладутся дорожки (Xoard читает только верхний уровень — в список они не попадают).</summary>
-    public const string TracksFolderName = "Дорожки";
-
     public double Seconds => Tracks.Count == 0 ? 0 : Tracks.Max(t => t.Seconds);
 
     public ClipTrack? this[TrackKind kind] => Tracks.FirstOrDefault(t => t.Kind == kind);
@@ -113,36 +99,18 @@ public sealed record MultiTrackClip(IReadOnlyList<ClipTrack> Tracks, string Sugg
     }
 
     /// <summary>
-    /// Сохраняет кусок [start, end) секунд: каждая непустая дорожка — WAV в папке «Дорожки\Имя»,
-    /// общий звук из <paramref name="include"/> — WAV в папке звуков. Возвращает путь общего звука
-    /// (null, если общий звук пуст — например, ничего не выбрано) и папку дорожек.
+    /// Звук для сохранения: одна дорожка (<paramref name="track"/>) или все вместе (null). Имя по
+    /// умолчанию — с названием дорожки («Повтор Discord 21-14-05»).
     /// </summary>
-    /// <exception cref="ArgumentException">Слишком короткий кусок или все дорожки пусты.</exception>
-    public (string? MixPath, string TracksFolder) SaveAs(string soundsFolder, string name, double startSeconds, double endSeconds, IEnumerable<TrackKind> include)
+    public AudioClip ClipOf(TrackKind? track) => track is { } kind
+        ? Mix([kind]) with { SuggestedName = NameFor(kind) }
+        : Mix(Recording.Tracks.All);
+
+    /// <summary>«Повтор 21-14-05» → «Повтор Discord 21-14-05».</summary>
+    public string NameFor(TrackKind kind)
     {
-        var title = string.IsNullOrWhiteSpace(name) ? SuggestedName : name.Trim();
-        var audible = Tracks.Where(t => !t.IsSilent).ToList();
-        if (audible.Count == 0)
-            throw new ArgumentException("Во всех дорожках тишина — нечего сохранять.");
-
-        var mix = Mix(include);
-        var mixPiece = AudioClips.Slice(mix.Stereo, startSeconds, endSeconds);
-        if (mixPiece.Length < AudioFormat.SampleRate / 50 * 2)
-            throw new ArgumentException("Выделен слишком короткий кусок — нужно хотя бы 20 мс.");
-
-        var tracksRoot = Path.Combine(soundsFolder, TracksFolderName);
-        var folder = AudioClips.UniqueFolderPath(tracksRoot, title);
-        Directory.CreateDirectory(folder);
-        foreach (var track in audible)
-            AudioClips.WriteWav(Path.Combine(folder, track.Title + ".wav"), track.ToFloat(startSeconds, endSeconds), AudioFormat.SampleRate);
-
-        string? mixPath = null;
-        if (AudioClips.PeakOf(mixPiece) >= ClipTrack.SilentPeak)
-        {
-            mixPath = AudioClips.UniqueWavPath(soundsFolder, Path.GetFileName(folder));
-            AudioClips.WriteWav(mixPath, mixPiece, AudioFormat.SampleRate);
-        }
-
-        return (mixPath, folder);
+        var space = SuggestedName.LastIndexOf(' ');
+        var title = Recording.Tracks.Title(kind);
+        return space > 0 ? $"{SuggestedName[..space]} {title}{SuggestedName[space..]}" : $"{SuggestedName} {title}";
     }
 }

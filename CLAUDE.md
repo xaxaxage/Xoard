@@ -52,10 +52,13 @@ on first start, see `src/Xoard.Core/Shell/LegacyMigration.cs`).
   Xoard (the user: "which program is the game — that's your job", so no guessing: every app with an audio session
   gets its own process-loopback capture, `AppAudioCaptures`; Xoard's own tree, its ancestors such as Explorer, and
   apps whose ancestor is already captured are skipped), and **Голос** = the processed voice as friends hear it
-  (`IVoiceTap` from the mic path; silence when muted). Saving writes each non-silent track as a WAV into
-  `<sounds>\Дорожки\<name>\` (the library reads only the top level) plus a mixed sound in the list; the editor
-  has per-track checkboxes for the mix. The old "Компьютер / Микрофон" source switch is gone; MCP `source` now
-  only picks the mix (system = Discord + Игра, mic = Голос).
+  (`IVoiceTap` from the mic path; silence when muted). **Saving = one sound** (1.4.2, after the user called
+  1.4's folder of track WAVs + mix checkboxes inconvenient): each strip's label is a button that opens the editor
+  with only that track; the main «Сохранить» opens it with all tracks together; the editor has a segment
+  «Всё вместе · Discord · Игра · Голос». No `Дорожки` folder, no app names in the editor (the user disliked
+  «Игра (steam, Xoard…)»). Hotkey/MCP save all tracks together (MCP `source`: system = Discord + Игра,
+  mic = Голос). Live strips are decimated to ≤1 point per 3 px, grouped by absolute bucket index (three full-res
+  strips stuttered).
 - **Clips go through an editor.** Recording and «Сохранить» (replay) from the window open `ClipEditor` with the
   clip in memory: «Сохранить выделенное», «Сохранить целиком», «Выбросить», «Сбросить выделение». No file until the
   user saves. Hotkeys (in a game) and MCP still save straight to a file. Trim uses the same editor.

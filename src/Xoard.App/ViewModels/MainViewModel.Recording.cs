@@ -38,16 +38,16 @@ public sealed record HotkeyTarget(HotkeyKind Kind, SoundItem? Sound = null)
 
 /// <summary>
 /// Клип для редактора: новая запись или повтор (ещё не файл) либо звук, который обрезают
-/// (<paramref name="TrimTarget"/>). У записи и повтора есть дорожки (<paramref name="Tracks"/>),
-/// <paramref name="Clip"/> — их общий звук.
+/// (<paramref name="TrimTarget"/>). У записи и повтора есть дорожки (<paramref name="Tracks"/>):
+/// <paramref name="Clip"/> — выбранная дорожка (<paramref name="Track"/>) или все вместе (null).
 /// </summary>
-public sealed record ClipDraft(AudioClip Clip, SoundItem? TrimTarget, string Title, string Subtitle, MultiTrackClip? Tracks = null)
+public sealed record ClipDraft(AudioClip Clip, SoundItem? TrimTarget, string Title, string Subtitle, MultiTrackClip? Tracks = null, TrackKind? Track = null)
 {
     public bool IsTrim => TrimTarget is not null;
 
-    /// <summary>Запись или повтор по дорожкам: общий звук из всех дорожек.</summary>
-    public static ClipDraft FromTracks(MultiTrackClip tracks, string title, string subtitle) =>
-        new(tracks.Mix(Xoard.Core.Recording.Tracks.All), null, title, subtitle, tracks);
+    /// <summary>Запись или повтор по дорожкам: одна дорожка или все вместе (null).</summary>
+    public static ClipDraft FromTracks(MultiTrackClip tracks, string title, string subtitle, TrackKind? track = null) =>
+        new(tracks.ClipOf(track), null, title, subtitle, tracks, track);
 }
 
 /// <summary>Запись, повтор и обрезка.</summary>
@@ -168,19 +168,21 @@ public sealed partial class MainViewModel
                     return null;
                 }
 
-                ClipEditRequested?.Invoke(ClipDraft.FromTracks(clip, "Новая запись", $"{TrackSummary(clip)} · {Clock(clip.Seconds)}"));
+                ClipEditRequested?.Invoke(ClipDraft.FromTracks(clip, "Новая запись", $"Длина {Clock(clip.Seconds)}"));
                 return null;
             }
 
-            var saved = await recorder.StopRecordingAsync(library.Folder, name).ConfigureAwait(true);
+            var path = await recorder.StopRecordingAsync(library.Folder, name).ConfigureAwait(true);
             IsRecording = false;
-            if (saved is null)
+            if (path is null)
             {
                 ShowToast("Запись слишком короткая — ничего не сохранено.", InfoBarSeverity.Warning);
                 return null;
             }
 
-            return AddSavedTracksOrNull(saved.Value, "Запись");
+            var item = AddRecordedFile(path);
+            ShowToast($"Запись сохранена: «{item.Name}».", InfoBarSeverity.Success);
+            return item;
         }
         catch (Exception ex) when (ex is InvalidOperationException or ArgumentException or IOException or UnauthorizedAccessException)
         {
@@ -196,20 +198,23 @@ public sealed partial class MainViewModel
 
     /// <summary>
     /// Последние N секунд повтора: из окна — в редактор клипа (файла ещё нет), по клавише — сразу новым звуком.
+    /// <paramref name="track"/> — только одна дорожка (кнопка на полосе), null — все вместе.
     /// </summary>
-    public async Task<SoundItem?> SaveReplayAsync(bool fromHotkey, double? seconds = null, string? name = null)
+    public async Task<SoundItem?> SaveReplayAsync(bool fromHotkey, double? seconds = null, string? name = null, TrackKind? track = null)
     {
         try
         {
             if (!fromHotkey)
             {
                 var clip = await recorder.TakeReplayClipAsync(seconds ?? ReplaySeconds).ConfigureAwait(true);
-                ClipEditRequested?.Invoke(ClipDraft.FromTracks(clip, "Повтор", $"{TrackSummary(clip)} · последние {Clock(clip.Seconds)}"));
+                ClipEditRequested?.Invoke(ClipDraft.FromTracks(clip, "Повтор", $"Последние {Clock(clip.Seconds)}", track));
                 return null;
             }
 
-            var saved = await recorder.SaveReplayAsync(seconds ?? ReplaySeconds, library.Folder, name).ConfigureAwait(true);
-            return AddSavedTracksOrNull(saved, "Повтор");
+            var path = await recorder.SaveReplayAsync(seconds ?? ReplaySeconds, library.Folder, name, track is { } one ? [one] : null).ConfigureAwait(true);
+            var item = AddRecordedFile(path);
+            ShowToast($"Повтор сохранён: «{item.Name}».", InfoBarSeverity.Success);
+            return item;
         }
         catch (Exception ex) when (ex is InvalidOperationException or ArgumentException or IOException or UnauthorizedAccessException)
         {
@@ -218,34 +223,8 @@ public sealed partial class MainViewModel
         }
     }
 
-    /// <summary>
-    /// Дорожки сохранены: общий звук — новой плиткой, про папку дорожек — в подсказке.
-    /// null — общий звук пуст (сохранились только дорожки).
-    /// </summary>
-    private SoundItem? AddSavedTracksOrNull((string? MixPath, string TracksFolder) saved, string what)
-    {
-        var folder = $"{MultiTrackClip.TracksFolderName}\\{Path.GetFileName(saved.TracksFolder)}";
-        if (saved.MixPath is null)
-        {
-            ShowToast($"{what}: общий звук пуст, дорожки сохранены в «{folder}».", InfoBarSeverity.Warning);
-            return null;
-        }
-
-        var item = AddRecordedFile(saved.MixPath);
-        ShowToast($"{what}: «{item.Name}» в звуках, дорожки — в «{folder}».", InfoBarSeverity.Success);
-        return item;
-    }
-
-    /// <summary>«Discord, Игра, Голос» — какие дорожки не пустые (и какие программы на «Игре»).</summary>
-    private string TrackSummary(MultiTrackClip clip)
-    {
-        var parts = clip.Tracks.Where(t => !t.IsSilent).Select(t => t.Title).ToList();
-        if (parts.Count == 0)
-            return "Везде тишина";
-        var games = recorder.AppNames(TrackKind.Game);
-        var summary = string.Join(", ", parts);
-        return games.Count > 0 && parts.Contains(Tracks.Title(TrackKind.Game)) ? $"{summary} ({string.Join(", ", games.Take(3))})" : summary;
-    }
+    /// <summary>Кнопка на полосе дорожки: последние секунды только этой дорожки — в редактор.</summary>
+    private Task<SoundItem?> SaveTrackReplay(TrackKind track) => SaveReplayAsync(fromHotkey: false, track: track);
 
     /// <summary>Файл уже в папке звуков — добавить плитку и загрузить.</summary>
     private SoundItem AddRecordedFile(string path)
@@ -275,23 +254,13 @@ public sealed partial class MainViewModel
         }
     }
 
-    /// <summary>
-    /// Сохранить клип (весь или кусок [start, end)) новым звуком; у записи и повтора — ещё и дорожки,
-    /// а общий звук — из дорожек <paramref name="include"/>. Возвращает текст ошибки или null.
-    /// </summary>
-    public async Task<string?> SaveClipAsync(ClipDraft draft, string name, double start, double end, IReadOnlyCollection<TrackKind>? include = null)
+    /// <summary>Сохранить клип (весь или кусок [start, end)) новым звуком. Возвращает текст ошибки или null.</summary>
+    public async Task<string?> SaveClipAsync(AudioClip clip, string name, double start, double end)
     {
         try
         {
             var folder = library.Folder;
-            if (draft.Tracks is { } tracks)
-            {
-                var saved = await Task.Run(() => tracks.SaveAs(folder, name, start, end, include ?? Tracks.All)).ConfigureAwait(true);
-                AddSavedTracksOrNull(saved, "Сохранено");
-                return null;
-            }
-
-            var path = await Task.Run(() => draft.Clip.SaveAs(folder, name, start, end)).ConfigureAwait(true);
+            var path = await Task.Run(() => clip.SaveAs(folder, name, start, end)).ConfigureAwait(true);
             var item = AddRecordedFile(path);
             ShowToast($"Сохранено: «{item.Name}».", InfoBarSeverity.Success);
             return null;

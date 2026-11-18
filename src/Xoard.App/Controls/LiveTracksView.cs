@@ -4,12 +4,13 @@ using Microsoft.UI.Xaml.Media;
 
 namespace Xoard.App.Controls;
 
-/// <summary>Дорожка живой полосы: подпись и источник волны.</summary>
-public sealed record LiveTrack(string Title, ILiveWaveSource Source);
+/// <summary>Дорожка живой полосы: подпись, источник волны и «сохранить эту дорожку».</summary>
+public sealed record LiveTrack(string Title, ILiveWaveSource Source, System.Windows.Input.ICommand Save);
 
 /// <summary>
 /// Живая полоса повтора по дорожкам: несколько <see cref="LiveWaveView"/> друг под другом,
-/// у каждой слева подпись моноширинным шрифтом (Discord / Игра / Голос).
+/// у каждой слева кнопка-подпись моноширинным шрифтом (DISCORD / ИГРА / ГОЛОС): нажатие сохраняет
+/// эту дорожку.
 /// </summary>
 public sealed partial class LiveTracksView : Grid
 {
@@ -34,13 +35,12 @@ public sealed partial class LiveTracksView : Grid
     public static readonly DependencyProperty LabelBrushProperty = DependencyProperty.Register(
         nameof(LabelBrush), typeof(Brush), typeof(LiveTracksView), new PropertyMetadata(null, (d, _) => ((LiveTracksView)d).Sync()));
 
-    private readonly List<(TextBlock Label, LiveWaveView Wave)> lanes = [];
+    /// <summary>Ширина кнопки-подписи слева (под неё же сдвигаются подписи времени под полосой).</summary>
+    public const double LabelWidth = 76;
 
-    public LiveTracksView()
-    {
-        IsHitTestVisible = false;
-        RowSpacing = 3;
-    }
+    private readonly List<(TextBlock Label, FontIcon Icon, LiveWaveView Wave)> lanes = [];
+
+    public LiveTracksView() => RowSpacing = 3;
 
     public IReadOnlyList<LiveTrack>? Tracks
     {
@@ -91,12 +91,13 @@ public sealed partial class LiveTracksView : Grid
         RowDefinitions.Clear();
         lanes.Clear();
         var tracks = Tracks ?? [];
-        var mono = Application.Current.Resources.TryGetValue("XFontMono", out var font) ? (FontFamily)font : null;
+        var resources = Application.Current.Resources;
+        var mono = resources.TryGetValue("XFontMono", out var font) ? (FontFamily)font : null;
         for (var i = 0; i < tracks.Count; i++)
         {
             RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
-            var lane = new Grid { ColumnSpacing = 8 };
-            lane.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(52) });
+            var lane = new Grid { ColumnSpacing = 6 };
+            lane.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(LabelWidth - 6) });
             lane.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
             var label = new TextBlock
             {
@@ -108,13 +109,31 @@ public sealed partial class LiveTracksView : Grid
             };
             if (mono is not null)
                 label.FontFamily = mono;
+            var icon = new FontIcon { Glyph = "", FontSize = 10, VerticalAlignment = VerticalAlignment.Center };
+            var content = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 5 };
+            content.Children.Add(icon);
+            content.Children.Add(label);
+            var button = new Button
+            {
+                Content = content,
+                Command = tracks[i].Save,
+                Padding = new Thickness(4, 0, 4, 0),
+                MinHeight = 0,
+                HorizontalAlignment = HorizontalAlignment.Stretch,
+                HorizontalContentAlignment = HorizontalAlignment.Left,
+                VerticalAlignment = VerticalAlignment.Stretch,
+            };
+            if (resources.TryGetValue("XQuietButton", out var style))
+                button.Style = (Style)style;
+            Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(button, $"Сохранить дорожку «{tracks[i].Title}»");
+            ToolTipService.SetToolTip(button, $"Сохранить дорожку «{tracks[i].Title}» — последние секунды только её");
             var wave = new LiveWaveView { Source = tracks[i].Source };
             SetColumn(wave, 1);
-            lane.Children.Add(label);
+            lane.Children.Add(button);
             lane.Children.Add(wave);
             SetRow(lane, i);
             Children.Add(lane);
-            lanes.Add((label, wave));
+            lanes.Add((label, icon, wave));
         }
 
         Sync();
@@ -122,10 +141,14 @@ public sealed partial class LiveTracksView : Grid
 
     private void Sync()
     {
-        foreach (var (label, wave) in lanes)
+        foreach (var (label, icon, wave) in lanes)
         {
             if (LabelBrush is { } labelBrush)
+            {
                 label.Foreground = labelBrush;
+                icon.Foreground = labelBrush;
+            }
+
             wave.Divisions = Divisions;
             wave.PeakBrush = PeakBrush;
             wave.RmsBrush = RmsBrush;

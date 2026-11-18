@@ -282,16 +282,16 @@ public sealed class RecordingService : IVoiceTap, IAsyncDisposable
     }
 
     /// <summary>
-    /// Остановить запись и сохранить сразу: дорожки — в «Дорожки\Имя», общий звук (дорожки из
-    /// <see cref="StartRecordingAsync"/>) — в папку звуков. null — записалось меньше 0,2 с.
+    /// Остановить запись и сохранить сразу одним звуком (дорожки из <see cref="StartRecordingAsync"/>
+    /// вместе) в папку звуков. Возвращает путь; null — записалось меньше 0,2 с.
     /// </summary>
-    public async Task<(string? MixPath, string TracksFolder)?> StopRecordingAsync(string folder, string? name)
+    public async Task<string?> StopRecordingAsync(string folder, string? name)
     {
         var mix = RecordingMix ?? Tracks.All;
         var clip = await StopRecordingClipAsync().ConfigureAwait(false);
         if (clip is null)
             return null;
-        return await Task.Run(() => clip.SaveAs(folder, name ?? clip.SuggestedName, 0, clip.Seconds, mix)).ConfigureAwait(false);
+        return await Task.Run(() => clip.Mix(mix).SaveAs(folder, name ?? clip.SuggestedName, 0, clip.Seconds)).ConfigureAwait(false);
     }
 
     /// <summary>Последние <paramref name="seconds"/> секунд повтора по дорожкам, без файлов — для редактора.</summary>
@@ -326,13 +326,15 @@ public sealed class RecordingService : IVoiceTap, IAsyncDisposable
         return new MultiTrackClip(tracks, $"Повтор {DateTime.Now:HH-mm-ss}");
     }
 
-    /// <summary>Сохранить последние <paramref name="seconds"/> секунд повтора сразу (дорожки и общий звук из <paramref name="mix"/>, null — все).</summary>
+    /// <summary>
+    /// Сохранить последние <paramref name="seconds"/> секунд повтора сразу одним звуком: дорожки
+    /// <paramref name="mix"/> вместе (null — все). Возвращает путь.
+    /// </summary>
     /// <exception cref="InvalidOperationException">Повтор выключен или буфер пуст.</exception>
-    /// <exception cref="ArgumentException">Во всех дорожках тишина.</exception>
-    public async Task<(string? MixPath, string TracksFolder)> SaveReplayAsync(double seconds, string folder, string? name, IReadOnlyList<TrackKind>? mix = null)
+    public async Task<string> SaveReplayAsync(double seconds, string folder, string? name, IReadOnlyList<TrackKind>? mix = null)
     {
         var clip = await TakeReplayClipAsync(seconds).ConfigureAwait(false);
-        return await Task.Run(() => clip.SaveAs(folder, name ?? clip.SuggestedName, 0, clip.Seconds, mix ?? Tracks.All)).ConfigureAwait(false);
+        return await Task.Run(() => clip.Mix(mix ?? Tracks.All).SaveAs(folder, name ?? clip.SuggestedName, 0, clip.Seconds)).ConfigureAwait(false);
     }
 
     /// <inheritdoc />

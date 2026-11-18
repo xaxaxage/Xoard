@@ -207,7 +207,7 @@ public sealed partial class MainViewModel
 
     /// <summary>Живые волны повтора по дорожкам (Discord, игра, голос) для элемента LiveTracksView.</summary>
     public IReadOnlyList<Controls.LiveTrack> LiveTracks => liveTracks ??=
-        [.. Tracks.All.Select(kind => new Controls.LiveTrack(Tracks.Title(kind), new LiveFeed(this, kind)))];
+        [.. Tracks.All.Select(kind => new Controls.LiveTrack(Tracks.Title(kind), new LiveFeed(this, kind), new RelayCommand(() => _ = SaveTrackReplay(kind))))];
 
     /// <summary>Деления на живой волне — каждые 5 секунд.</summary>
     public int ReplayDivisions => Math.Max(1, (int)Math.Round(ReplaySeconds / 5));

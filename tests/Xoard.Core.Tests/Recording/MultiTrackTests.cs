@@ -145,25 +145,37 @@ public sealed class MultiTrackTests : IDisposable
     }
 
     [Fact]
-    public void Saving_writes_each_audible_track_and_the_mix()
+    public void One_track_or_all_together_with_a_matching_name()
     {
-        var clip = new MultiTrackClip([Track(TrackKind.Discord, Rate, 8192), Track(TrackKind.Game, Rate, 4096), Track(TrackKind.Voice, Rate, 0)], "Повтор");
-        var (mixPath, folder) = clip.SaveAs(dir, "Смешной момент", 0.25, 0.75, [TrackKind.Discord, TrackKind.Game]);
+        var clip = new MultiTrackClip([Track(TrackKind.Discord, 100, 8192), Track(TrackKind.Game, 100, 4096), Track(TrackKind.Voice, 100, 0)], "Повтор 21-14-05");
 
-        Assert.Equal(Path.Combine(dir, MultiTrackClip.TracksFolderName, "Смешной момент"), folder);
-        Assert.True(File.Exists(Path.Combine(folder, "Discord.wav")));
-        Assert.True(File.Exists(Path.Combine(folder, "Игра.wav")));
-        Assert.False(File.Exists(Path.Combine(folder, "Голос.wav")));   // тишина не сохраняется
-        Assert.Equal(Path.Combine(dir, "Смешной момент.wav"), mixPath);
-        Assert.Equal(0.5, SoundDecoder.Decode(mixPath!, TimeSpan.FromMinutes(1), TestContext.Current.CancellationToken).Duration.TotalSeconds, 2);
+        var all = clip.ClipOf(null);
+        Assert.Equal(0.375f, all.Stereo[10], 3);
+        Assert.Equal("Повтор 21-14-05", all.SuggestedName);
 
-        // Второй раз с тем же именем — новые папка и файл, старые не трогаются
-        var (again, againFolder) = clip.SaveAs(dir, "Смешной момент", 0, 1, [TrackKind.Voice]);
-        Assert.Null(again);                                               // голос пуст — общего звука нет
-        Assert.EndsWith("Смешной момент (2)", againFolder, StringComparison.Ordinal);
+        var discord = clip.ClipOf(TrackKind.Discord);
+        Assert.Equal(0.25f, discord.Stereo[10], 3);
+        Assert.Equal("Повтор Discord 21-14-05", discord.SuggestedName);
+        Assert.Equal("Повтор Игра 21-14-05", clip.ClipOf(TrackKind.Game).SuggestedName);
+        Assert.Equal("Запись Голос", new MultiTrackClip([], "Запись").NameFor(TrackKind.Voice));
+    }
 
-        var silent = new MultiTrackClip([Track(TrackKind.Voice, Rate, 0)], "Тишина");
-        Assert.Throws<ArgumentException>(() => silent.SaveAs(dir, "x", 0, 1, Tracks.All));
+    [Fact]
+    public async Task Saving_right_away_gives_one_sound_file()
+    {
+        long now = 0;
+        await using var service = new RecordingService(() => now, Rate, captureApps: false);
+        await service.ConfigureReplayAsync(true, 10);
+        for (var i = 0; i < 100; i++)
+        {
+            now += 480;
+            service.OnVoice(Constant(480, 0.25f), 0);
+        }
+
+        var path = await service.SaveReplayAsync(1, dir, "Момент");
+        Assert.Equal(Path.Combine(dir, "Момент.wav"), path);
+        Assert.Single(Directory.GetFileSystemEntries(dir));                 // ни папок, ни лишних файлов
+        Assert.Equal(1, SoundDecoder.Decode(path, TimeSpan.FromMinutes(1), TestContext.Current.CancellationToken).Duration.TotalSeconds, 2);
     }
 
     // ───────── служба целиком (свои часы, без петель программ) ─────────

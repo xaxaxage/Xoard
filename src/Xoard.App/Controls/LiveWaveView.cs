@@ -142,8 +142,7 @@ public sealed partial class LiveWaveView : Grid
 
             source.Copy(peaks, levels);
             step = ActualWidth / (n - 1);
-            peak.Points = Build(peaks);
-            rms.Points = Build(levels);
+            BuildBoth(written, n);
         }
 
         // Между новыми отрезками волна едет влево плавно, а не рывком на целый отрезок
@@ -151,15 +150,53 @@ public sealed partial class LiveWaveView : Grid
         shift.X = -fraction * step;
     }
 
-    private PointCollection Build(float[] values)
+    /// <summary>
+    /// Пики и RMS — не больше точки на <see cref="PixelsPerPoint"/> пикселя: отрезки собираются в группы,
+    /// привязанные к их номеру за всё время (а не к краю окна), поэтому форма не «дышит» при прокрутке.
+    /// Иначе при 30–120 с повтора это тысячи точек на волну 20 раз в секунду — полосы дёргались.
+    /// </summary>
+    private void BuildBoth(long written, int n)
+    {
+        var group = Math.Max(1, (int)Math.Ceiling(n / Math.Max(1, ActualWidth / PixelsPerPoint)));
+        var start = written - n;                            // номер самого старого показанного отрезка
+        var mid = ActualHeight / 2;
+        var xs = new List<double>();
+        var tops = new List<double>();
+        var levelsOut = new List<double>();
+        var first = (long)Math.Floor(start / (double)group);
+        var last = (long)Math.Floor((written - 1) / (double)group);
+        for (var g = first; g <= last; g++)
+        {
+            var from = (int)Math.Max(0, (g * group) - start);
+            var to = (int)Math.Min(n, ((g + 1) * group) - start);
+            if (to <= from)
+                continue;
+            float max = 0;
+            double power = 0;
+            for (var i = from; i < to; i++)
+            {
+                max = Math.Max(max, peaks[i]);
+                power += levels[i] * levels[i];
+            }
+
+            xs.Add(step * (((g * group) + ((group - 1) / 2.0)) - start));
+            tops.Add(Amp(max, mid));
+            levelsOut.Add(Amp((float)Math.Sqrt(power / (to - from)), mid));
+        }
+
+        peak.Points = Outline(xs, tops, mid);
+        rms.Points = Outline(xs, levelsOut, mid);
+    }
+
+    private const double PixelsPerPoint = 3;
+
+    private static PointCollection Outline(List<double> xs, List<double> amps, double mid)
     {
         var points = new PointCollection();
-        var n = values.Length;
-        var mid = ActualHeight / 2;
-        for (var i = 0; i < n; i++)
-            points.Add(new Point(step * i, mid - Amp(values[i], mid)));
-        for (var i = n - 1; i >= 0; i--)
-            points.Add(new Point(step * i, mid + Amp(values[i], mid)));
+        for (var i = 0; i < xs.Count; i++)
+            points.Add(new Point(xs[i], mid - amps[i]));
+        for (var i = xs.Count - 1; i >= 0; i--)
+            points.Add(new Point(xs[i], mid + amps[i]));
         return points;
     }
 
