@@ -216,6 +216,36 @@ public sealed class MultiTrackTests : IDisposable
     }
 
     [Fact]
+    public async Task Mic_packets_reach_the_voice_track_through_the_mic_path()
+    {
+        long now = 0;
+        await using var service = new RecordingService(() => now, Rate, captureApps: false);
+        await service.ConfigureReplayAsync(true, 10);
+        var mic = new Xoard.Core.Audio.Mic.MicPassthrough(30, 20, () => now, Rate) { Tap = service };
+        mic.Attach(NAudio.Wave.WaveFormat.CreateIeeeFloatWaveFormat(Rate, 2), Xoard.Core.Audio.Mic.MicChannelMode.Average, 0, "mic");
+
+        var packet = new byte[480 * 2 * sizeof(float)];
+        System.Runtime.InteropServices.MemoryMarshal.Cast<byte, float>(packet.AsSpan()).Fill(0.3f);
+        for (var i = 0; i < 100; i++)
+        {
+            now += 480;
+            mic.OnPacket(packet, 0);
+        }
+
+        var voice = (await service.TakeReplayClipAsync(1)).ClipOf(TrackKind.Voice);
+        Assert.True(voice.Stereo.Max() > 0.29f, $"голос на дорожке: пик {voice.Stereo.Max():0.000}");
+
+        mic.SetGain(1f, isMuted: true);                                  // выключенный микрофон — тишина
+        for (var i = 0; i < 300; i++)
+        {
+            now += 480;
+            mic.OnPacket(packet, 0);
+        }
+
+        Assert.Equal(0f, (await service.TakeReplayClipAsync(1)).ClipOf(TrackKind.Voice).Stereo.Max());
+    }
+
+    [Fact]
     public async Task Recording_gives_all_tracks_from_start_to_stop()
     {
         long now = Rate;

@@ -115,6 +115,76 @@ public sealed partial class MainViewModel
         return (moved, kept);
     }
 
+    /// <summary>
+    /// Кнопка «Обновить»: перечитать папку звуков — новые файлы появляются плитками, плитки файлов,
+    /// которых больше нет, убираются. Порядок, клавиши и то, что сейчас играет, остаются как были;
+    /// клавиша пропавшего файла снимается, но назначение помнится — вернётся файл, вернётся и клавиша.
+    /// </summary>
+    [RelayCommand]
+    private void RescanSounds()
+    {
+        List<SoundFile> files;
+        try
+        {
+            files = [.. library.Scan(config.SoundOrder)];
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            ShowToast($"Не удалось прочитать папку звуков: {ex.Message}", InfoBarSeverity.Error);
+            return;
+        }
+
+        var present = files.Select(f => f.FileName).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var gone = Sounds.Where(s => !present.Contains(s.File.FileName)).ToList();
+        foreach (var item in gone)
+        {
+            if (item.Handle is not null)
+            {
+                engine.StopSound(item.Handle);
+                byKey.Remove(item.Handle.Key);
+            }
+
+            byFile.TryRemove(item.File.FileName, out _);
+            hotkeys?.Unregister(SoundHotkeyPrefix + item.File.FileName);
+            Sounds.Remove(item);
+            VisibleSounds.Remove(item);
+        }
+
+        var added = new List<SoundItem>();
+        foreach (var file in files.Where(f => !byFile.ContainsKey(f.FileName)))
+        {
+            var item = new SoundItem(this, file);
+            Sounds.Add(item);
+            byFile[file.FileName] = item;
+            added.Add(item);
+            _ = LoadAsync(item);
+            if (hotkeys is not null && config.SoundHotkeys.TryGetValue(file.FileName, out var text)
+                && Xoard.Core.Hotkeys.HotkeyGesture.TryParse(text, out var gesture))
+            {
+                item.HotkeyText = gesture.ToString();
+                hotkeys.Register(SoundHotkeyPrefix + file.FileName, gesture);
+            }
+        }
+
+        RefreshVisible();
+        OnSoundsChanged();
+        if (added.Count > 0 || gone.Count > 0)
+            SaveOrder();
+
+        var parts = new List<string>();
+        if (added.Count == 1)
+            parts.Add($"появился «{added[0].Name}»");
+        else if (added.Count > 1)
+            parts.Add($"новых звуков: {added.Count}");
+        if (gone.Count == 1)
+            parts.Add($"убран «{gone[0].Name}» — файла больше нет");
+        else if (gone.Count > 1)
+            parts.Add($"убрано звуков, которых больше нет в папке: {gone.Count}");
+        ShowToast(
+            parts.Count == 0 ? "В папке звуков ничего нового." : string.Concat(char.ToUpperInvariant(parts[0][0]), string.Join("; ", parts)[1..]) + ".",
+            parts.Count == 0 ? InfoBarSeverity.Informational : InfoBarSeverity.Success);
+    }
+
     /// <summary>Клавиши звуков текущей папки (клавиши «Стоп всё», «Запись», «Повтор» не трогаются).</summary>
     private void RegisterSoundHotkeys()
     {
