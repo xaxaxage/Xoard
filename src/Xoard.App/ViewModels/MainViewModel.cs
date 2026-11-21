@@ -595,6 +595,39 @@ public sealed partial class MainViewModel : ObservableObject, IAsyncDisposable
         }
     }
 
+    /// <summary>Копия звука сразу за оригиналом; клавиша не копируется (она у каждого звука своя).</summary>
+    public void Duplicate(SoundItem item)
+    {
+        try
+        {
+            var file = library.Duplicate(item.File);
+            var copy = new SoundItem(this, file);
+            var index = Sounds.IndexOf(item);
+            Sounds.Insert(index < 0 ? Sounds.Count : index + 1, copy);
+            byFile[file.FileName] = copy;
+            _ = LoadAsync(copy);
+
+            // Имя копии начинается с имени оригинала, поэтому при поиске она видна там же, где он
+            var visibleIndex = VisibleSounds.IndexOf(item);
+            if (visibleIndex >= 0)
+            {
+                VisibleSounds.Insert(visibleIndex + 1, copy);
+                OnSoundsChanged();
+            }
+            else
+            {
+                RefreshVisible();
+            }
+
+            SaveOrder();
+            ShowToast($"Сделана копия «{file.Name}».", InfoBarSeverity.Success);
+        }
+        catch (SoundLibraryException ex)
+        {
+            ShowToast(ex.Message, InfoBarSeverity.Error);
+        }
+    }
+
     public void ShowInFolder(SoundItem item) =>
         Process.Start(new ProcessStartInfo("explorer.exe", $"/select,\"{item.File.Path}\"") { UseShellExecute = true });
 

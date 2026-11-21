@@ -103,6 +103,36 @@ public sealed class LibraryAndConfigTests : IDisposable
     }
 
     [Fact]
+    public void Duplicate_copies_next_to_the_original_with_a_free_name()
+    {
+        var lib = NewLibrary();
+        var file = lib.Import([Source("Бум.WAV")]).Added[0];
+
+        var first = lib.Duplicate(file);
+        var second = lib.Duplicate(file);
+
+        Assert.Equal("Бум - копия", first.Name);
+        Assert.Equal("Бум - копия.WAV", first.FileName);
+        Assert.Equal("Бум - копия (2)", second.Name);
+        Assert.Equal(lib.Folder, Path.GetDirectoryName(first.Path));
+        Assert.Equal(File.ReadAllBytes(file.Path), File.ReadAllBytes(first.Path));
+        Assert.True(File.Exists(file.Path));   // оригинал на месте
+        Assert.Equal(3, lib.Scan([]).Count);
+    }
+
+    [Fact]
+    public void Duplicate_of_a_missing_file_says_so()
+    {
+        var lib = NewLibrary();
+        var file = lib.Import([Source("gone.mp3")]).Added[0];
+        File.Delete(file.Path);
+
+        var ex = Assert.Throws<SoundLibraryException>(() => lib.Duplicate(file));
+        Assert.Contains("gone", ex.Message, StringComparison.Ordinal);
+        Assert.Empty(lib.Scan([]));
+    }
+
+    [Fact]
     public void Delete_goes_to_recycle_bin()
     {
         var bin = new FakeRecycleBin();

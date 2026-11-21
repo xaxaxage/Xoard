@@ -155,6 +155,9 @@
                                             <MenuFlyoutItem Text="Переименовать…" Command="{x:Bind RenameCommand}">
                                                 <MenuFlyoutItem.Icon><FontIcon Glyph="&#xE8AC;" /></MenuFlyoutItem.Icon>
                                             </MenuFlyoutItem>
+                                            <MenuFlyoutItem Text="Дублировать" Command="{x:Bind DuplicateCommand}">
+                                                <MenuFlyoutItem.Icon><FontIcon Glyph="&#xE8C8;" /></MenuFlyoutItem.Icon>
+                                            </MenuFlyoutItem>
                                             <MenuFlyoutItem Text="Показать в папке" Command="{x:Bind ShowInFolderCommand}">
                                                 <MenuFlyoutItem.Icon><FontIcon Glyph="&#xE838;" /></MenuFlyoutItem.Icon>
                                             </MenuFlyoutItem>

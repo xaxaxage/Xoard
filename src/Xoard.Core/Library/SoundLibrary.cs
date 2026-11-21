@@ -38,7 +38,7 @@ public interface IRecycleBin
 
 /// <summary>
 /// Папка звуков (Документы\Xoard\Sounds): список, добавление (копирование), переименование,
-/// удаление в корзину. Порядок кнопок хранится в настройках по именам файлов.
+/// копия, удаление в корзину. Порядок кнопок хранится в настройках по именам файлов.
 /// </summary>
 public sealed class SoundLibrary
 {
@@ -159,6 +159,25 @@ public sealed class SoundLibrary
         }
 
         return new SoundFile(target, name);
+    }
+
+    /// <summary>
+    /// Копия звука в той же папке: «Имя - копия», а если занято — «Имя - копия (2)» и дальше.
+    /// </summary>
+    public SoundFile Duplicate(SoundFile file)
+    {
+        ArgumentNullException.ThrowIfNull(file);
+        var target = UniquePath(file.Name + " - копия", System.IO.Path.GetExtension(file.Path));
+        try
+        {
+            File.Copy(file.Path, target);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            throw new SoundLibraryException($"Не удалось сделать копию «{file.Name}»: {ex.Message}", ex);
+        }
+
+        return new SoundFile(target, System.IO.Path.GetFileNameWithoutExtension(target));
     }
 
     /// <summary>Удаляет звук в корзину.</summary>
